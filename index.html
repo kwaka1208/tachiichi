@@ -94,7 +94,9 @@
   }
   button.ghost { background: transparent; color: var(--ink); }
   button.wide { width: 100%; }
-  button:focus-visible, input:focus-visible { outline: 3px solid var(--mine); outline-offset: 2px; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--mine); outline-offset: 2px; }
+  a { color: var(--dot); font-weight: 700; }
+  .help-link { margin-top: 24px; text-align: center; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .url { flex: 1 1 240px; word-break: break-all; font-size: 1.05rem; font-weight: 700; }
   /* 進行役：横長の画面ではマップとQRコードを左右に、縦長の画面では上下に並べる */
@@ -124,7 +126,7 @@
 
   <section id="v-create" hidden>
     <h1>たちいち</h1>
-    <p class="sub">2つの軸を決めて、みんなの立ち位置を四象限に集めます。軸を決めると参加者用のURLが発行されます。</p>
+    <p class="sub">2つの軸を決めて、みんなの立ち位置を四象限に集めます。軸を決めると参加者用のURLが発行されます。<a href="help.html" target="_blank" rel="noopener">使い方</a></p>
     <label for="f-title">お題</label>
     <input type="text" id="f-title" maxlength="40" placeholder="例：これからの働き方">
     <fieldset>
@@ -200,6 +202,8 @@
         <button class="ghost" id="b-reset">投票をすべて消す</button>
       </p>
     </div>
+
+    <p class="sub help-link"><a href="help.html" target="_blank" rel="noopener">たちいちの使い方</a></p>
   </section>
 
   <p id="msg" role="status"></p>

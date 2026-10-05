@@ -30,7 +30,7 @@ jobs:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: |
           mkdir _site
-          cp index.html og.png _site/
+          cp index.html help.html og.png _site/
           # JSONとして正しいか、必要な項目がそろっているかを確かめてから config.js を書き出す
           node -e '
             const raw = process.env.FIREBASE_CONFIG;

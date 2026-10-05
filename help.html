@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使い方｜たちいち</title>
+<meta name="description" content="たちいちの使い方。進行役が投票をつくって結果を見せるまでの流れと、参加者が投票する方法を説明します。">
+<style>
+  :root {
+    --paper: #FBFCFA;
+    --ink: #1D2B36;
+    --sub: #5C6B75;
+    --line: #C9D3D6;
+    --dot: #1F8A84;
+    --mine: #E4572E;
+    --panel: #EEF3F2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Noto Sans JP", sans-serif;
+    line-height: 1.8;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 20px 16px 64px; }
+  h1 { font-size: 1.5rem; line-height: 1.4; margin: 0 0 8px; }
+  h2 { font-size: 1.25rem; line-height: 1.4; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--ink); }
+  h3 { font-size: 1.05rem; line-height: 1.4; margin: 28px 0 8px; }
+  p { margin: 0 0 12px; }
+  ul, ol { margin: 0 0 12px; padding-left: 1.4em; }
+  li { margin-bottom: 4px; }
+  a { color: var(--dot); font-weight: 700; }
+  a:focus-visible { outline: 3px solid var(--mine); outline-offset: 2px; }
+  .sub { color: var(--sub); font-size: .9rem; }
+  .btn { display: inline-block; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 4px; font-size: .9em; font-weight: 700; white-space: nowrap; }
+  .panel { background: var(--panel); border-radius: 6px; padding: 16px; margin: 16px 0; }
+  .panel p:last-child, .panel ul:last-child { margin-bottom: 0; }
+  nav ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .back { margin-top: 40px; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>たちいちの使い方</h1>
+  <p class="sub">2つの軸を決めて、参加者がスマートフォンから自分の立ち位置を投票するツールです。結果は四象限のマップにリアルタイムで集まります。</p>
+
+  <nav class="panel" aria-label="このページの目次">
+    <ul>
+      <li><a href="#host">進行役の方へ</a></li>
+      <li><a href="#guest">参加者の方へ</a></li>
+      <li><a href="#notes">ご利用の前に</a></li>
+    </ul>
+  </nav>
+
+  <h2 id="host">進行役の方へ</h2>
+
+  <h3>1. 投票をつくる</h3>
+  <p><a href="./">トップページ</a>で、次の項目を入れて <span class="btn">投票をつくる</span> を押します。</p>
+  <ul>
+    <li><strong>お題</strong>：何について立ち位置を聞くか（40文字まで）</li>
+    <li><strong>横の軸</strong>：左と右の言葉（それぞれ12文字まで）</li>
+    <li><strong>縦の軸</strong>：上と下の言葉（それぞれ12文字まで）</li>
+    <li><strong>名前なしの投票を許可する</strong>：チェックすると、参加者は名前を入れなくても投票できます</li>
+    <li><strong>締め切り</strong>：入れておくと、その時刻に投票が締め切られ、結果が表示されます。入れなくてもかまいません</li>
+  </ul>
+  <p>締め切りは、つくったあとに変えられません。軸の言葉も同じです。</p>
+
+  <h3>2. 参加者を集める</h3>
+  <p>投票をつくると、進行役用の画面に切り替わります。この画面のURLは、進行役だけが使ってください。</p>
+  <p>画面に出ているQRコードを参加者に読み取ってもらいます。プロジェクターに映すと便利です。QRコードが使えない場合は、<span class="btn">URLをコピー</span> や <span class="btn">URLを共有</span> で参加用のURLを送ってください。</p>
+  <p>QRコードの大きさは <span class="btn">QRコードを小さく</span> と <span class="btn">QRコードを大きく</span> で切り替えられます。</p>
+
+  <h3>3. 結果を表示する</h3>
+  <p>結果が出るまで、参加者には自分の点しか見えません。ほかの人の位置を見て答えが引っ張られないようにするためです。進行役の画面には投票した人数だけが表示されます。</p>
+  <p>みんなが投票し終えたら <span class="btn">結果を表示する</span> を押します。全員の画面に結果が出て、投票は締め切られます。締め切り時刻を入れた場合は、その時刻になると自動で結果が表示されます。</p>
+
+  <h3>4. 結果を見る</h3>
+  <ul>
+    <li>マップの四隅にある薄い数字は、その象限に入った人数です。軸のちょうど上に置かれた票は、どの象限にも数えません</li>
+    <li><span class="btn">ヒートマップで見る</span> を押すと、票が集まっている場所を色の濃さで表示します。<span class="btn">点で見る</span> で元に戻ります</li>
+    <li>名前は最初は隠しています。点にマウスを乗せるかタップすると、その人の名前が出ます。<span class="btn">名前を表示する</span> を押すと、全員の名前を表示します</li>
+  </ul>
+  <p>この表示の切り替えは、押した人の画面だけに反映されます。</p>
+
+  <h3>5. 結果を保存する</h3>
+  <ul>
+    <li><span class="btn">画像で保存</span>：いま画面に出ているマップを、お題と人数を添えてPNG画像で保存します。ヒートマップで表示していれば、ヒートマップのまま保存されます</li>
+    <li><span class="btn">AI向けデータを保存</span>：全員の位置と象限ごとの人数を、文章のファイル（Markdown形式）で保存します。軸の意味も書き込んであるので、そのまま生成AIに渡して分析や要約に使えます。名前を隠している間に保存すると、名前は入りません</li>
+  </ul>
+
+  <h3>6. やり直す</h3>
+  <p><span class="btn">投票をすべて消す</span> を押すと、すべての票を消して、結果を隠した状態に戻します。同じお題と軸のまま、もう一度投票できます。消した票は元に戻せません。</p>
+  <p>締め切り時刻を過ぎたあとに消した場合は、もう投票できません。別の回として聞き直すときは、新しく投票をつくってください。</p>
+
+  <h2 id="guest">参加者の方へ</h2>
+
+  <h3>1. 名前を入れる</h3>
+  <p>QRコードかURLから開くと、投票の画面が出ます。まず名前を入れてください（10文字まで）。進行役が名前なしの投票を許可しているときは、入れなくてもかまいません。</p>
+
+  <h3>2. 位置を選んで投票する</h3>
+  <p>マップをタップすると、その場所にオレンジの点が置かれます。指を置いたまま動かすと、点もついてきます。マップの下には、選んだ位置が「〇〇寄り（強め）」のように言葉で表示されます。</p>
+  <p>位置が決まったら、画面の下にある <span class="btn">投票する</span> を押します。</p>
+  <p class="sub">パソコンでは、マップを選んでから矢印キーでも動かせます。Shiftキーを押しながらだと大きく動きます。</p>
+
+  <h3>3. 投票し直す</h3>
+  <p>結果が表示されるまでは、何度でも投票し直せます。点を動かしてから <span class="btn">この位置に投票し直す</span> を押してください。前の票は新しい位置に置き換わります。</p>
+
+  <h3>4. 結果を見る</h3>
+  <p>進行役が結果を表示すると（または締め切り時刻になると）、全員の位置がマップに出ます。あなたの点はオレンジで、ほかの人の点は青緑です。結果が出たあとは投票できません。</p>
+
+  <h2 id="notes">ご利用の前に</h2>
+  <div class="panel">
+    <p>たちいちは、ワークショップや会議などの場で手軽に使うことを想定しています。そのため、次の点はあえて簡単なしくみにしています。</p>
+    <ul>
+      <li>ログインはありません。参加用のURLを知っている人は、誰でも投票できます</li>
+      <li>1人1票は、ブラウザに記録した情報で区別しています。別のブラウザや端末で開くと、もう1票投票できてしまいます</li>
+      <li>投票のデータは、つくったあともサーバーに残ります。個人を特定できる情報や、人に知られたくない内容はお題や名前に入れないでください</li>
+    </ul>
+  </div>
+
+  <p class="back"><a href="./">たちいちのトップページへ</a></p>
+
+</main>
+</body>
+</html>
