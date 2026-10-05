@@ -142,6 +142,9 @@
       </div>
     </fieldset>
     <label class="check"><input type="checkbox" id="f-anon"> 名前なしの投票を許可する</label>
+    <label for="f-deadline">締め切り（入れなくてもかまいません）</label>
+    <input type="datetime-local" id="f-deadline">
+    <p class="sub">締め切りを入れると、その時刻に投票が締め切られ、結果が表示されます。入れないときは進行役が「結果を表示する」を押したときに締め切ります。</p>
     <p style="margin-top:20px"><button class="wide" id="b-create">投票をつくる</button></p>
   </section>
 
@@ -239,6 +242,11 @@ function openCreate(db) {
       if (!meta[k]) { say("すべての欄を入力してください"); $("f-" + k).focus(); return; }
     }
     if ($("f-anon").checked) meta.anon = true;
+    if ($("f-deadline").value) {
+      const deadline = new Date($("f-deadline").value).getTime();
+      if (!(deadline > Date.now())) { say("締め切りには、これから先の日時を入れてください"); $("f-deadline").focus(); return; }
+      meta.deadline = deadline;
+    }
     const id = newRoomId();
     try {
       await set(ref(db, `rooms/${id}/meta`), meta);
@@ -275,7 +283,12 @@ async function openRoom(db) {
   const nameKey = "tachiichi-name";
   let mine = loadMine(storeKey);       // { id, x, y } 自分の投票
   let votes = {};                      // 全員の投票
-  let revealed = false;                // 進行役が結果を公開したか
+  const deadline = typeof meta.deadline === "number" ? meta.deadline : null; // 締め切り時刻（ミリ秒）
+  let shown = false;                   // 進行役が「結果を表示する」を押したか
+  let timeUp = false;                  // 締め切り時刻を過ぎたか
+  let revealed = false;                // 結果を公開しているか（shown か timeUp）
+  let offset = 0;                      // 端末の時計とFirebaseサーバーの時刻のずれ
+  let timer = null;
   let pos = mine ? { x: mine.x, y: mine.y } : null; // マップで選んでいる位置
   let dragging = false;
   let qrSmall = false;                 // 結果の公開中はQRコードを小さくする
@@ -323,7 +336,10 @@ async function openRoom(db) {
     $("b-reset").addEventListener("click", async () => {
       const keys = Object.keys(votes);
       if (!keys.length && !revealed) { say("まだ投票がありません"); return; }
-      if (!confirm(`${keys.length}件の投票をすべて消して、結果を隠します。元に戻せません。よろしいですか？`)) return;
+      const ask = timeUp
+        ? `${keys.length}件の投票をすべて消します。締め切りを過ぎているため、投票し直すことはできません。元に戻せません。よろしいですか？`
+        : `${keys.length}件の投票をすべて消して、結果を隠します。元に戻せません。よろしいですか？`;
+      if (!confirm(ask)) return;
       // 票の削除と非公開への切り替えを、まとめて1回で書き込む
       const changes = Object.fromEntries(keys.map((k) => [`votes/${k}`, null]));
       changes["state/revealed"] = null;
@@ -386,6 +402,7 @@ async function openRoom(db) {
         } catch (e) {}
         say("投票しました。結果が表示されるまでは、投票し直すこともできます");
       } catch (e) {
+        refresh();
         say(revealed ? "投票は締め切られました" : "投票を送れませんでした。通信状況を確認してください");
       }
     });
@@ -409,11 +426,30 @@ async function openRoom(db) {
   onValue(votesRef, (snap) => { votes = snap.val() || {}; render(); },
     () => say("結果を読み込めませんでした。通信状況を確認してください"));
   onValue(stateRef, (snap) => {
-    const next = !!(snap.val() && snap.val().revealed === true);
+    shown = !!(snap.val() && snap.val().revealed === true);
+    refresh();
+  }, () => say("結果を読み込めませんでした。通信状況を確認してください"));
+
+  // 締め切りの判定はサーバーの時刻に合わせる（端末の時計がずれていても同じ時刻に締め切る）
+  if (deadline) {
+    onValue(ref(db, ".info/serverTimeOffset"), (snap) => { offset = snap.val() || 0; refresh(); });
+    // スリープから戻ったときはタイマーが遅れることがあるので、表示のたびに確かめる
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  }
+
+  // 公開状態を決め直す。締め切り前なら、締め切り時刻にもう一度呼ぶ
+  function refresh() {
+    clearTimeout(timer);
+    if (deadline) {
+      const left = deadline - (Date.now() + offset);
+      timeUp = left <= 0;
+      if (!timeUp) timer = setTimeout(refresh, Math.min(left + 100, 2 ** 31 - 1));
+    }
+    const next = shown || timeUp;
     if (next !== revealed) { say(""); qrSmall = next; }
     revealed = next;
     render();
-  }, () => say("結果を読み込めませんでした。通信状況を確認してください"));
+  }
 
   function render() {
     const voted = !isHost && mine && votes[mine.id];
@@ -447,12 +483,14 @@ async function openRoom(db) {
     }
 
     const n = Object.values(votes).filter(valid).length;
+    const until = deadline ? `締め切りは${formatTime(deadline)}です。` : "";
     let text;
     if (revealed) text = `${n}人の結果です`;
-    else if (isHost) text = `${n}人が投票しました。「結果を表示する」を押すと、みんなの位置が表示されます`;
-    else if (voted) text = "投票しました。進行役が結果を表示するまでお待ちください";
-    else if (anon) text = "マップで位置を選んでから「投票する」を押してください。名前は入れなくてもかまいません";
-    else text = "名前を入れ、マップで位置を選んでから「投票する」を押してください";
+    else if (isHost) text = `${n}人が投票しました。${until}「結果を表示する」を押すと、みんなの位置が表示されます`;
+    else if (voted) text = deadline ? `投票しました。${until}締め切ると結果が表示されます`
+      : "投票しました。進行役が結果を表示するまでお待ちください";
+    else if (anon) text = `${until}マップで位置を選んでから「投票する」を押してください。名前は入れなくてもかまいません`;
+    else text = `${until}名前を入れ、マップで位置を選んでから「投票する」を押してください`;
     $("count").textContent = text;
 
     const hasNames = Object.values(votes).some((v) => valid(v) && typeof v.name === "string" && v.name);
@@ -666,6 +704,11 @@ const fileName = (s) => s.replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40);
 const clamp = (n) => Math.max(-100, Math.min(100, n));
 
 // 位置を「チームで寄り（強め）・挑戦寄り（弱め）」のような言葉にする（指で点が隠れても確かめられるように）
+// 締め切り時刻を「10月5日 15:00」の形にする
+function formatTime(ms) {
+  return new Date(ms).toLocaleString("ja-JP", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function describe(p, meta) {
   const part = (v, neg, posi) => {
     if (v === 0) return null;
