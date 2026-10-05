@@ -37,6 +37,10 @@
   #map .me { fill: var(--mine); stroke: #fff; stroke-width: 2; }
   #map .nm { font-size: 11px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: #fff; stroke-width: 3px; dominant-baseline: central; }
   #map .nm.mine { fill: var(--mine); }
+  /* 名前を隠しているときは、点にマウスを乗せるかタップした点の名前だけを出す */
+  #map.hide-names .nm { display: none; }
+  #map.hide-names .pt:hover .nm, #map.hide-names .pt.open .nm { display: inline; }
+  #map.hide-names .pt { cursor: pointer; }
   #map .guide { stroke: var(--mine); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .6; }
   /* 位置を選んでいる間は、マップ上でスクロールや拡大が起きないようにする */
   body.picking #map { touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
@@ -143,6 +147,9 @@
     </svg>
     <p id="pos" aria-live="polite" hidden></p>
     <p class="sub" id="count" style="margin-top:8px"></p>
+    <div class="row" id="view-bar" hidden>
+      <button class="ghost" id="b-names" aria-pressed="false">名前を隠す</button>
+    </div>
     </div>
 
     <aside id="qr-box" hidden>
@@ -249,6 +256,7 @@ async function openRoom(db) {
   let pos = mine ? { x: mine.x, y: mine.y } : null; // マップで選んでいる位置
   let dragging = false;
   let qrSmall = false;                 // 結果の公開中はQRコードを小さくする
+  let namesHidden = false;             // 結果で名前を隠しているか（この画面だけの設定）
   const votesRef = ref(db, `rooms/${room}/votes`);
   const stateRef = ref(db, `rooms/${room}/state`);
 
@@ -348,6 +356,15 @@ async function openRoom(db) {
     });
   }
 
+  $("b-names").addEventListener("click", () => { namesHidden = !namesHidden; render(); });
+  // 名前を隠しているときは、タップした点の名前を出す（マウスがない端末向け）
+  $("map").addEventListener("click", (ev) => {
+    if (!revealed || !namesHidden) return;
+    const pt = ev.target.closest(".pt");
+    for (const g of $("g-dots").querySelectorAll(".pt.open")) if (g !== pt) g.classList.remove("open");
+    if (pt) pt.classList.toggle("open");
+  });
+
   onValue(votesRef, (snap) => { votes = snap.val() || {}; render(); },
     () => say("結果を読み込めませんでした。通信状況を確認してください"));
   onValue(stateRef, (snap) => {
@@ -370,8 +387,8 @@ async function openRoom(db) {
         if (v.x !== 0 && v.y !== 0) q[(v.y > 0 ? 0 : 2) + (v.x > 0 ? 1 : 0)]++;
         const isMine = !isHost && mine && id === mine.id;
         // 自分の点は最後に描いて、ほかの点に隠れないようにする
-        if (isMine) myDot.push(...dot(v.x, v.y, true, v.name));
-        else dots.append(...dot(v.x, v.y, false, v.name));
+        if (isMine) myDot.push(dot(v.x, v.y, true, v.name));
+        else dots.append(dot(v.x, v.y, false, v.name));
       }
       dots.append(...myDot);
       [[105, 105], [295, 105], [105, 295], [295, 295]].forEach(([cx, cy], i) => {
@@ -384,7 +401,7 @@ async function openRoom(db) {
       // 公開前は自分が選んでいる位置だけ。動かしている間は軸までのガイド線を出す
       const cx = 200 + pos.x * 1.8, cy = 200 - pos.y * 1.8;
       if (dragging) dots.append(line(cx, cy, 200, cy), line(cx, cy, cx, 200));
-      dots.append(...dot(pos.x, pos.y, true));
+      dots.append(dot(pos.x, pos.y, true));
     }
 
     const n = Object.values(votes).filter(valid).length;
@@ -395,6 +412,12 @@ async function openRoom(db) {
     else if (anon) text = "マップで位置を選んでから「投票する」を押してください。名前は入れなくてもかまいません";
     else text = "名前を入れ、マップで位置を選んでから「投票する」を押してください";
     $("count").textContent = text;
+
+    const hasNames = Object.values(votes).some((v) => valid(v) && typeof v.name === "string" && v.name);
+    $("view-bar").hidden = !revealed || !hasNames;
+    $("map").classList.toggle("hide-names", namesHidden);
+    $("b-names").textContent = namesHidden ? "名前を表示する" : "名前を隠す";
+    $("b-names").setAttribute("aria-pressed", String(namesHidden));
 
     if (isHost) {
       $("b-reveal").hidden = revealed;
@@ -468,15 +491,18 @@ function valid(v) {
     && Math.abs(v.x) <= 100 && Math.abs(v.y) <= 100;
 }
 
-// 点と、名前があればラベルを返す（右寄りの点はラベルを左側に出して、はみ出さないようにする）
+// 点と、名前があればラベルをまとめた g を返す（右寄りの点はラベルを左側に出して、はみ出さないようにする）
 function dot(x, y, isMine, name) {
   const cx = 200 + x * 1.8, cy = 200 - y * 1.8;
+  const g = document.createElementNS(SVG, "g");
+  g.setAttribute("class", "pt");
   const c = document.createElementNS(SVG, "circle");
   c.setAttribute("cx", cx);
   c.setAttribute("cy", cy);
   c.setAttribute("r", isMine ? 11 : 7);
   c.setAttribute("class", isMine ? "me" : "v");
-  if (typeof name !== "string" || !name) return [c];
+  g.append(c);
+  if (typeof name !== "string" || !name) return g;
   const t = document.createElementNS(SVG, "text");
   const left = x > 40;
   t.setAttribute("x", left ? cx - 12 : cx + 12);
@@ -484,7 +510,8 @@ function dot(x, y, isMine, name) {
   t.setAttribute("text-anchor", left ? "end" : "start");
   t.setAttribute("class", isMine ? "nm mine" : "nm");
   t.textContent = name;
-  return [c, t];
+  g.append(t);
+  return g;
 }
 
 function loadMine(key) {
