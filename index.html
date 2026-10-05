@@ -198,6 +198,7 @@
     </div>
 
     <div class="panel" id="host-panel" hidden>
+      <p class="sub" id="view-only" hidden>この端末では表示だけができます。結果の表示や投票の削除は、投票をつくったブラウザで行ってください。</p>
       <p style="margin:0" class="row">
         <button id="b-reveal">結果を表示する</button>
         <button class="ghost" id="b-png" hidden>画像で保存</button>
@@ -216,6 +217,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, get, set, push, update, onValue }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const $ = (id) => document.getElementById(id);
 const show = (id) => { $(id).hidden = false; };
@@ -223,8 +225,11 @@ const say = (text) => { $("msg").textContent = text; };
 const SVG = "http://www.w3.org/2000/svg";
 
 const params = new URLSearchParams(location.search);
-const room = (params.get("board") || params.get("room") || "").replace(/[^A-Za-z0-9]/g, "");
-const isHost = params.get("view") === "host";
+// 進行役用URLは ?host={秘密キー}。参加者用URL（?board={id}）からは割り出せないようにしている
+const hostKey = (params.get("host") || "").replace(/[^A-Za-z0-9]/g, "");
+let room = (params.get("board") || "").replace(/[^A-Za-z0-9]/g, "");
+const isHost = !!hostKey;
+let uid = null;                        // 匿名認証で割り当てられた、このブラウザのID
 
 // 設定値は config.js から読み込む（ファイルがなくても設定画面を出せるよう動的に読む）
 let firebaseConfig = null;
@@ -235,8 +240,32 @@ try {
 if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR")) {
   show("v-setup");
 } else {
-  const db = getDatabase(initializeApp(firebaseConfig));
-  if (room) openRoom(db); else openCreate(db);
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  // 投票をつくった人だけが進行役の操作をでき、参加者は自分の票だけを書き換えられるよう、
+  // ブラウザごとに匿名でサインインする（一度サインインしたブラウザでは同じIDが使われる）
+  try {
+    uid = (await signInAnonymously(getAuth(app))).user.uid;
+  } catch (e) {
+    say("接続できませんでした。通信状況を確認して、もう一度開いてください");
+  }
+  if (uid) {
+    if (hostKey) openHost(db);
+    else if (room) openRoom(db);
+    else openCreate(db);
+  }
+}
+
+// 秘密キーから投票を探して、進行役の画面を開く
+async function openHost(db) {
+  try {
+    const host = (await get(ref(db, `hosts/${hostKey}`))).val();
+    if (!host || typeof host.room !== "string") { say("この投票は見つかりません。URLを確認してください"); return; }
+    room = host.room;
+  } catch (e) {
+    say("読み込めませんでした。通信状況を確認して、もう一度開いてください"); return;
+  }
+  openRoom(db);
 }
 
 /* ---------- 投票をつくる ---------- */
@@ -254,19 +283,22 @@ function openCreate(db) {
       if (!(deadline > Date.now())) { say("締め切りには、これから先の日時を入れてください"); $("f-deadline").focus(); return; }
       meta.deadline = deadline;
     }
-    const id = newRoomId();
+    meta.owner = uid;
+    const id = randomId(8);
+    const key = randomId(20);          // 進行役用URLの秘密キー（room IDとは無関係に作る）
     try {
-      await set(ref(db, `rooms/${id}/meta`), meta);
-      location.href = `${location.pathname}?board=${id}&view=host`;
+      // 投票の中身と、秘密キーから投票を引くための対応を、まとめて1回で書き込む
+      await update(ref(db), { [`rooms/${id}/meta`]: meta, [`hosts/${key}`]: { room: id } });
+      location.href = `${location.pathname}?host=${key}`;
     } catch (e) {
       say("投票をつくれませんでした。通信状況とFirebaseの設定を確認してください");
     }
   });
 }
 
-function newRoomId() {
+function randomId(length) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
   return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
 
@@ -286,6 +318,7 @@ async function openRoom(db) {
   show("v-room");
 
   const anon = meta.anon === true;     // 名前なしの投票を許可しているか
+  const canManage = isHost && meta.owner === uid; // 結果の表示や削除ができるか（投票をつくったブラウザだけ）
   const storeKey = "tachiichi-" + room;
   const nameKey = "tachiichi-name";
   let mine = loadMine(storeKey);       // { id, x, y } 自分の投票
@@ -307,6 +340,7 @@ async function openRoom(db) {
   if (isHost) {
     document.body.classList.add("host");
     show("host-panel"); show("qr-box");
+    if (!canManage) { show("view-only"); $("b-reset").hidden = true; }
     const url = `${location.origin}${location.pathname}?board=${room}`;
     $("share-url").textContent = url;
     drawQr(url);
@@ -416,7 +450,8 @@ async function openRoom(db) {
       const { x, y } = pos;
       const id = (mine && mine.id) || push(votesRef).key;
       try {
-        await set(ref(db, `rooms/${room}/votes/${id}`), name ? { x, y, name } : { x, y });
+        // uid を添えて、ほかの人がこの票を書き換えられないようにする（ルールで確かめる）
+        await set(ref(db, `rooms/${room}/votes/${id}`), name ? { x, y, uid, name } : { x, y, uid });
         mine = { id, x, y };
         try {
           localStorage.setItem(storeKey, JSON.stringify(mine));
@@ -530,7 +565,7 @@ async function openRoom(db) {
     $("b-names").setAttribute("aria-pressed", String(namesHidden));
 
     if (isHost) {
-      $("b-reveal").hidden = revealed;
+      $("b-reveal").hidden = revealed || !canManage;
       $("b-png").hidden = !revealed;
       $("b-md").hidden = !revealed;
       $("qr-box").classList.toggle("small", qrSmall);
