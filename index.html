@@ -60,6 +60,8 @@
     width: 100%; padding: 10px 12px; font: inherit; color: inherit;
     border: 1.5px solid var(--line); border-radius: 6px; background: #fff;
   }
+  label.check { display: flex; align-items: center; gap: 8px; margin-top: 20px; font-size: 1rem; cursor: pointer; }
+  label.check input { width: 20px; height: 20px; margin: 0; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   fieldset { border: 0; padding: 0; margin: 16px 0 0; }
   legend { font-weight: 700; padding: 0; }
@@ -117,13 +119,14 @@
         <div><label for="f-yt">上</label><input type="text" id="f-yt" maxlength="12" placeholder="例：挑戦"></div>
       </div>
     </fieldset>
+    <label class="check"><input type="checkbox" id="f-anon"> 名前なしの投票を許可する</label>
     <p style="margin-top:20px"><button class="wide" id="b-create">投票をつくる</button></p>
   </section>
 
   <section id="v-room" hidden>
     <h1 id="title"></h1>
     <div id="name-box" hidden>
-      <label for="f-name">名前</label>
+      <label for="f-name" id="l-name">名前</label>
       <input type="text" id="f-name" maxlength="10" placeholder="例：わか" autocomplete="nickname">
     </div>
     <div class="stage">
@@ -205,6 +208,7 @@ function openCreate(db) {
       meta[k] = $("f-" + k).value.trim();
       if (!meta[k]) { say("すべての欄を入力してください"); $("f-" + k).focus(); return; }
     }
+    if ($("f-anon").checked) meta.anon = true;
     const id = newRoomId();
     try {
       await set(ref(db, `rooms/${id}/meta`), meta);
@@ -236,6 +240,7 @@ async function openRoom(db) {
   for (const k of ["xl", "xr", "yb", "yt"]) $("l-" + k).textContent = meta[k];
   show("v-room");
 
+  const anon = meta.anon === true;     // 名前なしの投票を許可しているか
   const storeKey = "tachiichi-" + room;
   const nameKey = "tachiichi-name";
   let mine = loadMine(storeKey);       // { id, x, y } 自分の投票
@@ -288,6 +293,7 @@ async function openRoom(db) {
     show("name-box"); show("pos"); show("vote-bar");
     $("vote-bar").prepend($("msg"));   // メッセージを投票ボタンのすぐ上に出す
     try { $("f-name").value = localStorage.getItem(nameKey) || ""; } catch (e) {}
+    if (anon) $("l-name").textContent = "名前（入れなくても投票できます）";
 
     // マップをタップ（クリック）して点を置き、指を動かすと点もついてくる
     const map = $("map");
@@ -324,16 +330,16 @@ async function openRoom(db) {
 
     $("b-vote").addEventListener("click", async () => {
       const name = $("f-name").value.trim();
-      if (!name) { say("名前を入力してください"); $("f-name").focus(); return; }
+      if (!name && !anon) { say("名前を入力してください"); $("f-name").focus(); return; }
       if (!pos) { say("マップをタップして、あなたの位置を選んでください"); return; }
       const { x, y } = pos;
       const id = (mine && mine.id) || push(votesRef).key;
       try {
-        await set(ref(db, `rooms/${room}/votes/${id}`), { x, y, name });
+        await set(ref(db, `rooms/${room}/votes/${id}`), name ? { x, y, name } : { x, y });
         mine = { id, x, y };
         try {
           localStorage.setItem(storeKey, JSON.stringify(mine));
-          localStorage.setItem(nameKey, name);
+          if (name) localStorage.setItem(nameKey, name);
         } catch (e) {}
         say("投票しました。結果が表示されるまでは、投票し直すこともできます");
       } catch (e) {
@@ -386,6 +392,7 @@ async function openRoom(db) {
     if (revealed) text = `${n}人の結果です`;
     else if (isHost) text = `${n}人が投票しました。「結果を表示する」を押すと、みんなの位置が表示されます`;
     else if (voted) text = "投票しました。進行役が結果を表示するまでお待ちください";
+    else if (anon) text = "マップで位置を選んでから「投票する」を押してください。名前は入れなくてもかまいません";
     else text = "名前を入れ、マップで位置を選んでから「投票する」を押してください";
     $("count").textContent = text;
 

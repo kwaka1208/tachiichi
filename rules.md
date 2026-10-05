@@ -12,6 +12,7 @@
         "meta": {
           ".write": "!data.exists()",
           ".validate": "newData.hasChildren(['title','xl','xr','yb','yt'])",
+          "anon": { ".validate": "newData.isBoolean()" },
           "$f": { ".validate": "newData.isString() && newData.val().length <= 40" }
         },
         "state": {
@@ -22,7 +23,7 @@
         "votes": {
           "$vote": {
             ".write": "!newData.exists() || root.child('rooms').child($room).child('state/revealed').val() !== true",
-            ".validate": "newData.hasChildren(['x','y','name'])",
+            ".validate": "newData.hasChildren(['x','y']) && (newData.hasChild('name') || root.child('rooms').child($room).child('meta/anon').val() === true)",
             "x": { ".validate": "newData.isNumber() && newData.val() >= -100 && newData.val() <= 100" },
             "y": { ".validate": "newData.isNumber() && newData.val() >= -100 && newData.val() <= 100" },
             "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 10" },
