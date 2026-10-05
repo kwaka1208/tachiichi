@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>たちいち｜2軸で立ち位置を投票する</title>
+<style>
+  :root {
+    --paper: #FBFCFA;
+    --ink: #1D2B36;
+    --sub: #5C6B75;
+    --line: #C9D3D6;
+    --dot: #1F8A84;
+    --mine: #E4572E;
+    --panel: #EEF3F2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Noto Sans JP", sans-serif;
+    line-height: 1.7;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+  body.host main { max-width: min(92vh, 960px); }
+  h1 { font-size: 1.35rem; line-height: 1.4; margin: 0 0 12px; font-weight: 700; }
+  body.host h1 { font-size: 1.9rem; text-align: center; }
+  p { margin: 0 0 12px; }
+  .sub { color: var(--sub); font-size: .9rem; }
+
+  #map { width: 100%; height: auto; display: block; background: #fff; border: 2px solid var(--ink); border-radius: 6px; }
+  #map .axis { stroke: var(--ink); stroke-width: 1.5; }
+  #map .lab { font-size: 13px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: #fff; stroke-width: 4px; }
+  #map .qn { font-size: 44px; font-weight: 700; fill: var(--ink); opacity: .1; text-anchor: middle; dominant-baseline: central; }
+  #map .v { fill: var(--dot); opacity: .55; }
+  #map .me { fill: var(--mine); stroke: #fff; stroke-width: 2; }
+  #map .nm { font-size: 11px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: #fff; stroke-width: 3px; dominant-baseline: central; }
+  #map .nm.mine { fill: var(--mine); }
+  #map .guide { stroke: var(--mine); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .6; }
+  /* 位置を選んでいる間は、マップ上でスクロールや拡大が起きないようにする */
+  body.picking #map { touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+
+  .panel { background: var(--panel); border-radius: 6px; padding: 16px; margin-top: 16px; }
+  #name-box { margin-bottom: 12px; }
+  #name-box label { margin-top: 0; }
+  #pos { margin: 8px 0 0; font-weight: 700; font-size: 1.05rem; min-height: 1.7em; }
+  /* 投票ボタンは画面下に固定して、スクロールしなくても押せるようにする */
+  #vote-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--paper); border-top: 1px solid var(--line);
+  }
+  #vote-bar > * { max-width: 528px; margin-left: auto; margin-right: auto; }
+  #vote-bar #msg { margin-top: 0; min-height: 0; }
+  body.picking main { padding-bottom: 140px; }
+
+  label { display: block; font-weight: 700; font-size: .9rem; margin-top: 12px; }
+  input[type=text] {
+    width: 100%; padding: 10px 12px; font: inherit; color: inherit;
+    border: 1.5px solid var(--line); border-radius: 6px; background: #fff;
+  }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  fieldset { border: 0; padding: 0; margin: 16px 0 0; }
+  legend { font-weight: 700; padding: 0; }
+
+  button {
+    font: inherit; font-weight: 700; min-height: 48px; padding: 10px 20px;
+    border: 2px solid var(--ink); border-radius: 6px; background: var(--ink); color: #fff; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--ink); }
+  button.wide { width: 100%; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--mine); outline-offset: 2px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .url { flex: 1 1 240px; word-break: break-all; font-size: 1.05rem; font-weight: 700; }
+  #msg { min-height: 1.7em; margin-top: 10px; font-weight: 700; color: var(--mine); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+
+  <section id="v-setup" hidden>
+    <h1>Firebaseの設定が必要です</h1>
+    <p><code>config.example.js</code> を <code>config.js</code> という名前でコピーし、Firebaseコンソールで表示される設定値に書き換えてください。手順は <code>rules.md</code> にあります。</p>
+  </section>
+
+  <section id="v-create" hidden>
+    <h1>たちいち</h1>
+    <p class="sub">2つの軸を決めて、みんなの立ち位置を四象限に集めます。軸を決めると参加者用のURLが発行されます。</p>
+    <label for="f-title">お題</label>
+    <input type="text" id="f-title" maxlength="40" placeholder="例：これからの働き方">
+    <fieldset>
+      <legend>横の軸</legend>
+      <div class="pair">
+        <div><label for="f-xl">左</label><input type="text" id="f-xl" maxlength="12" placeholder="例：個人で"></div>
+        <div><label for="f-xr">右</label><input type="text" id="f-xr" maxlength="12" placeholder="例：チームで"></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>縦の軸</legend>
+      <div class="pair">
+        <div><label for="f-yb">下</label><input type="text" id="f-yb" maxlength="12" placeholder="例：安定"></div>
+        <div><label for="f-yt">上</label><input type="text" id="f-yt" maxlength="12" placeholder="例：挑戦"></div>
+      </div>
+    </fieldset>
+    <p style="margin-top:20px"><button class="wide" id="b-create">投票をつくる</button></p>
+  </section>
+
+  <section id="v-room" hidden>
+    <h1 id="title"></h1>
+    <div id="name-box" hidden>
+      <label for="f-name">名前</label>
+      <input type="text" id="f-name" maxlength="10" placeholder="例：わか" autocomplete="nickname">
+    </div>
+    <svg id="map" viewBox="0 0 400 400" role="img" aria-label="投票結果の四象限マップ">
+      <g id="g-count"></g>
+      <line class="axis" x1="200" y1="10" x2="200" y2="390"/>
+      <line class="axis" x1="10" y1="200" x2="390" y2="200"/>
+      <g id="g-dots"></g>
+      <text class="lab" id="l-xl" x="8" y="192" text-anchor="start"></text>
+      <text class="lab" id="l-xr" x="392" y="192" text-anchor="end"></text>
+      <text class="lab" id="l-yt" x="207" y="22" text-anchor="start"></text>
+      <text class="lab" id="l-yb" x="207" y="390" text-anchor="start"></text>
+    </svg>
+    <p id="pos" aria-live="polite" hidden></p>
+    <p class="sub" id="count" style="margin-top:8px"></p>
+
+    <div id="vote-bar" hidden>
+      <button class="wide" id="b-vote">投票する</button>
+    </div>
+
+    <div class="panel" id="host-panel" hidden>
+      <p class="sub">参加者にこのURLを伝えてください</p>
+      <div class="row">
+        <span class="url" id="share-url"></span>
+        <button class="ghost" id="b-copy">URLをコピー</button>
+      </div>
+      <p style="margin:16px 0 0" class="row">
+        <button id="b-reveal">結果を表示する</button>
+        <button class="ghost" id="b-reset">投票をすべて消す</button>
+      </p>
+    </div>
+  </section>
+
+  <p id="msg" role="status"></p>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, get, set, push, update, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => { $(id).hidden = false; };
+const say = (text) => { $("msg").textContent = text; };
+const SVG = "http://www.w3.org/2000/svg";
+
+const params = new URLSearchParams(location.search);
+const room = (params.get("room") || "").replace(/[^A-Za-z0-9]/g, "");
+const isHost = params.get("view") === "host";
+
+// 設定値は config.js から読み込む（ファイルがなくても設定画面を出せるよう動的に読む）
+let firebaseConfig = null;
+try {
+  ({ firebaseConfig } = await import("./config.js"));
+} catch (e) {}
+
+if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR")) {
+  show("v-setup");
+} else {
+  const db = getDatabase(initializeApp(firebaseConfig));
+  if (room) openRoom(db); else openCreate(db);
+}
+
+/* ---------- 投票をつくる ---------- */
+function openCreate(db) {
+  show("v-create");
+  $("b-create").addEventListener("click", async () => {
+    const meta = {};
+    for (const k of ["title", "xl", "xr", "yb", "yt"]) {
+      meta[k] = $("f-" + k).value.trim();
+      if (!meta[k]) { say("すべての欄を入力してください"); $("f-" + k).focus(); return; }
+    }
+    const id = newRoomId();
+    try {
+      await set(ref(db, `rooms/${id}/meta`), meta);
+      location.href = `${location.pathname}?room=${id}&view=host`;
+    } catch (e) {
+      say("投票をつくれませんでした。通信状況とFirebaseの設定を確認してください");
+    }
+  });
+}
+
+function newRoomId() {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+/* ---------- 投票する・結果を見る ---------- */
+async function openRoom(db) {
+  let meta;
+  try {
+    meta = (await get(ref(db, `rooms/${room}/meta`))).val();
+  } catch (e) {
+    say("読み込めませんでした。通信状況を確認して、もう一度開いてください"); return;
+  }
+  if (!meta) { say("この投票は見つかりません。URLを確認してください"); return; }
+
+  document.title = meta.title + "｜たちいち";
+  $("title").textContent = meta.title;
+  for (const k of ["xl", "xr", "yb", "yt"]) $("l-" + k).textContent = meta[k];
+  show("v-room");
+
+  const storeKey = "tachiichi-" + room;
+  const nameKey = "tachiichi-name";
+  let mine = loadMine(storeKey);       // { id, x, y } 自分の投票
+  let votes = {};                      // 全員の投票
+  let revealed = false;                // 進行役が結果を公開したか
+  let pos = mine ? { x: mine.x, y: mine.y } : null; // マップで選んでいる位置
+  let dragging = false;
+  const votesRef = ref(db, `rooms/${room}/votes`);
+  const stateRef = ref(db, `rooms/${room}/state`);
+
+  if (isHost) {
+    document.body.classList.add("host");
+    show("host-panel");
+    const url = `${location.origin}${location.pathname}?room=${room}`;
+    $("share-url").textContent = url;
+    $("b-copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(url); say("URLをコピーしました"); }
+      catch (e) { say("コピーできませんでした。URLを長押しして選択してください"); }
+    });
+    $("b-reveal").addEventListener("click", async () => {
+      if (!Object.values(votes).some(valid)) { say("まだ投票がありません"); return; }
+      try { await set(stateRef, { revealed: true }); say(""); }
+      catch (e) { say("結果を表示できませんでした。通信状況を確認してください"); }
+    });
+    $("b-reset").addEventListener("click", async () => {
+      const keys = Object.keys(votes);
+      if (!keys.length && !revealed) { say("まだ投票がありません"); return; }
+      if (!confirm(`${keys.length}件の投票をすべて消して、結果を隠します。元に戻せません。よろしいですか？`)) return;
+      // 票の削除と非公開への切り替えを、まとめて1回で書き込む
+      const changes = Object.fromEntries(keys.map((k) => [`votes/${k}`, null]));
+      changes["state/revealed"] = null;
+      try {
+        await update(ref(db, `rooms/${room}`), changes);
+        say("投票をすべて消しました");
+      } catch (e) { say("消せませんでした。通信状況を確認してください"); }
+    });
+  } else {
+    show("name-box"); show("pos"); show("vote-bar");
+    $("vote-bar").prepend($("msg"));   // メッセージを投票ボタンのすぐ上に出す
+    try { $("f-name").value = localStorage.getItem(nameKey) || ""; } catch (e) {}
+
+    // マップをタップ（クリック）して点を置き、指を動かすと点もついてくる
+    const map = $("map");
+    const pick = (ev) => {
+      const r = map.getBoundingClientRect();
+      const vx = (ev.clientX - r.left) / r.width * 400;
+      const vy = (ev.clientY - r.top) / r.height * 400;
+      pos = { x: clamp(Math.round((vx - 200) / 1.8)), y: clamp(Math.round((200 - vy) / 1.8)) };
+      render();
+    };
+    map.addEventListener("pointerdown", (ev) => {
+      if (revealed) return;
+      ev.preventDefault();
+      dragging = true;
+      map.setPointerCapture(ev.pointerId);
+      pick(ev);
+    });
+    map.addEventListener("pointermove", (ev) => { if (dragging) pick(ev); });
+    const stop = () => { if (dragging) { dragging = false; render(); } };
+    map.addEventListener("pointerup", stop);
+    map.addEventListener("pointercancel", stop);
+
+    // キーボードでは矢印キーで動かす（Shiftで大きく）
+    map.setAttribute("tabindex", "0");
+    map.addEventListener("keydown", (ev) => {
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[ev.key];
+      if (!d || revealed) return;
+      ev.preventDefault();
+      const step = ev.shiftKey ? 20 : 5;
+      const p = pos || { x: 0, y: 0 };
+      pos = { x: clamp(p.x + d[0] * step), y: clamp(p.y + d[1] * step) };
+      render();
+    });
+
+    $("b-vote").addEventListener("click", async () => {
+      const name = $("f-name").value.trim();
+      if (!name) { say("名前を入力してください"); $("f-name").focus(); return; }
+      if (!pos) { say("マップをタップして、あなたの位置を選んでください"); return; }
+      const { x, y } = pos;
+      const id = (mine && mine.id) || push(votesRef).key;
+      try {
+        await set(ref(db, `rooms/${room}/votes/${id}`), { x, y, name });
+        mine = { id, x, y };
+        try {
+          localStorage.setItem(storeKey, JSON.stringify(mine));
+          localStorage.setItem(nameKey, name);
+        } catch (e) {}
+        say("投票しました。結果が表示されるまでは、投票し直すこともできます");
+      } catch (e) {
+        say(revealed ? "投票は締め切られました" : "投票を送れませんでした。通信状況を確認してください");
+      }
+    });
+  }
+
+  onValue(votesRef, (snap) => { votes = snap.val() || {}; render(); },
+    () => say("結果を読み込めませんでした。通信状況を確認してください"));
+  onValue(stateRef, (snap) => {
+    const next = !!(snap.val() && snap.val().revealed === true);
+    if (next !== revealed) say("");
+    revealed = next;
+    render();
+  }, () => say("結果を読み込めませんでした。通信状況を確認してください"));
+
+  function render() {
+    const voted = !isHost && mine && votes[mine.id];
+    const dots = $("g-dots"), counts = $("g-count");
+    dots.replaceChildren(); counts.replaceChildren();
+
+    if (revealed) {
+      const q = [0, 0, 0, 0]; // 左上, 右上, 左下, 右下
+      const myDot = [];
+      for (const [id, v] of Object.entries(votes)) {
+        if (!valid(v)) continue;
+        if (v.x !== 0 && v.y !== 0) q[(v.y > 0 ? 0 : 2) + (v.x > 0 ? 1 : 0)]++;
+        const isMine = !isHost && mine && id === mine.id;
+        // 自分の点は最後に描いて、ほかの点に隠れないようにする
+        if (isMine) myDot.push(...dot(v.x, v.y, true, v.name));
+        else dots.append(...dot(v.x, v.y, false, v.name));
+      }
+      dots.append(...myDot);
+      [[105, 105], [295, 105], [105, 295], [295, 295]].forEach(([cx, cy], i) => {
+        const t = document.createElementNS(SVG, "text");
+        t.setAttribute("class", "qn"); t.setAttribute("x", cx); t.setAttribute("y", cy);
+        t.textContent = q[i];
+        counts.append(t);
+      });
+    } else if (!isHost && pos) {
+      // 公開前は自分が選んでいる位置だけ。動かしている間は軸までのガイド線を出す
+      const cx = 200 + pos.x * 1.8, cy = 200 - pos.y * 1.8;
+      if (dragging) dots.append(line(cx, cy, 200, cy), line(cx, cy, cx, 200));
+      dots.append(...dot(pos.x, pos.y, true));
+    }
+
+    const n = Object.values(votes).filter(valid).length;
+    let text;
+    if (revealed) text = `${n}人の結果です`;
+    else if (isHost) text = `${n}人が投票しました。「結果を表示する」を押すと、みんなの位置が表示されます`;
+    else if (voted) text = "投票しました。進行役が結果を表示するまでお待ちください";
+    else text = "名前を入れ、マップで位置を選んでから「投票する」を押してください";
+    $("count").textContent = text;
+
+    if (isHost) { $("b-reveal").hidden = revealed; return; }
+
+    document.body.classList.toggle("picking", !revealed);
+    $("name-box").hidden = revealed;
+    $("pos").hidden = revealed;
+    $("vote-bar").hidden = revealed;
+    $("pos").textContent = pos
+      ? "あなたの位置：" + describe(pos, meta)
+      : "マップをタップして、あなたの位置を選んでください";
+    $("map").setAttribute("aria-label", revealed ? "投票結果の四象限マップ"
+      : "あなたの位置を選ぶマップ。矢印キーでも動かせます。" + $("pos").textContent);
+    const moved = voted && pos && (pos.x !== mine.x || pos.y !== mine.y);
+    $("b-vote").textContent = !voted ? "投票する" : moved ? "この位置に投票し直す" : "投票済み（動かすと投票し直せます）";
+  }
+}
+
+const clamp = (n) => Math.max(-100, Math.min(100, n));
+
+// 位置を「チームで寄り（強め）・挑戦寄り（弱め）」のような言葉にする（指で点が隠れても確かめられるように）
+function describe(p, meta) {
+  const part = (v, neg, posi) => {
+    if (v === 0) return null;
+    const a = Math.abs(v);
+    return `${v > 0 ? posi : neg}寄り（${a <= 33 ? "弱め" : a <= 66 ? "中くらい" : "強め"}）`;
+  };
+  const parts = [part(p.x, meta.xl, meta.xr), part(p.y, meta.yb, meta.yt)].filter(Boolean);
+  return parts.length ? parts.join("・") : "ちょうど真ん中";
+}
+
+function line(x1, y1, x2, y2) {
+  const l = document.createElementNS(SVG, "line");
+  l.setAttribute("x1", x1); l.setAttribute("y1", y1);
+  l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+  l.setAttribute("class", "guide");
+  return l;
+}
+
+function valid(v) {
+  return v && typeof v.x === "number" && typeof v.y === "number"
+    && Math.abs(v.x) <= 100 && Math.abs(v.y) <= 100;
+}
+
+// 点と、名前があればラベルを返す（右寄りの点はラベルを左側に出して、はみ出さないようにする）
+function dot(x, y, isMine, name) {
+  const cx = 200 + x * 1.8, cy = 200 - y * 1.8;
+  const c = document.createElementNS(SVG, "circle");
+  c.setAttribute("cx", cx);
+  c.setAttribute("cy", cy);
+  c.setAttribute("r", isMine ? 11 : 7);
+  c.setAttribute("class", isMine ? "me" : "v");
+  if (typeof name !== "string" || !name) return [c];
+  const t = document.createElementNS(SVG, "text");
+  const left = x > 40;
+  t.setAttribute("x", left ? cx - 12 : cx + 12);
+  t.setAttribute("y", cy);
+  t.setAttribute("text-anchor", left ? "end" : "start");
+  t.setAttribute("class", isMine ? "nm mine" : "nm");
+  t.textContent = name;
+  return [c, t];
+}
+
+function loadMine(key) {
+  try {
+    const m = JSON.parse(localStorage.getItem(key));
+    return m && typeof m.id === "string" && valid(m) ? m : null;
+  } catch (e) { return null; }
+}
+</script>
+</body>
+</html>
