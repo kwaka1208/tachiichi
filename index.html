@@ -223,7 +223,7 @@ const say = (text) => { $("msg").textContent = text; };
 const SVG = "http://www.w3.org/2000/svg";
 
 const params = new URLSearchParams(location.search);
-const room = (params.get("room") || "").replace(/[^A-Za-z0-9]/g, "");
+const room = (params.get("board") || params.get("room") || "").replace(/[^A-Za-z0-9]/g, "");
 const isHost = params.get("view") === "host";
 
 // 設定値は config.js から読み込む（ファイルがなくても設定画面を出せるよう動的に読む）
@@ -257,7 +257,7 @@ function openCreate(db) {
     const id = newRoomId();
     try {
       await set(ref(db, `rooms/${id}/meta`), meta);
-      location.href = `${location.pathname}?room=${id}&view=host`;
+      location.href = `${location.pathname}?board=${id}&view=host`;
     } catch (e) {
       say("投票をつくれませんでした。通信状況とFirebaseの設定を確認してください");
     }
@@ -307,7 +307,7 @@ async function openRoom(db) {
   if (isHost) {
     document.body.classList.add("host");
     show("host-panel"); show("qr-box");
-    const url = `${location.origin}${location.pathname}?room=${room}`;
+    const url = `${location.origin}${location.pathname}?board=${room}`;
     $("share-url").textContent = url;
     drawQr(url);
     // コピーできたらボタン自体で知らせ、できなければボタンの下に案内を出してURLを選択しておく
