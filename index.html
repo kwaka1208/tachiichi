@@ -26,6 +26,7 @@
     --dot: #1F8A84;
     --mine: #E4572E;
     --panel: #EEF3F2;
+    --footer-h: 44px;
   }
   * { box-sizing: border-box; }
   body {
@@ -67,11 +68,11 @@
   #name-box { margin-bottom: 12px; }
   #name-box label { margin-top: 0; }
   #pos { margin: 8px 0 0; font-weight: 700; font-size: 1.05rem; min-height: 1.7em; }
-  /* 投票ボタンはマップのすぐ下に置き、画面に収まらないときは画面下に貼り付けてスクロールせずに押せるようにする */
+  /* 投票ボタンはマップのすぐ下に置き、画面に収まらないときはフッターのすぐ上に貼り付けてスクロールせずに押せるようにする */
   #vote-bar {
-    position: sticky; bottom: 0; z-index: 10;
+    position: sticky; bottom: calc(var(--footer-h) + env(safe-area-inset-bottom)); z-index: 10;
     margin: 16px -16px 0;
-    padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+    padding: 8px 16px 12px;
     background: var(--paper); border-top: 1px solid var(--line);
   }
   #vote-bar #msg { margin-top: 0; min-height: 0; }
@@ -115,7 +116,15 @@
   #copy-msg:empty { display: none; }
   #msg { min-height: 1.7em; margin-top: 10px; font-weight: 700; color: var(--mine); }
   [hidden] { display: none !important; }
-  .site-footer { margin: 0 auto; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); text-align: center; color: var(--sub); font-size: .9rem; }
+  /* フッターは常に画面の下端に出す。その分だけ本文の下に余白をとる */
+  body { padding-bottom: calc(var(--footer-h) + env(safe-area-inset-bottom)); }
+  .site-footer {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    height: calc(var(--footer-h) + env(safe-area-inset-bottom));
+    padding: 0 16px env(safe-area-inset-bottom);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--paper); border-top: 1px solid var(--line); color: var(--sub); font-size: .9rem;
+  }
   .site-footer p { margin: 0; }
 </style>
 </head>
