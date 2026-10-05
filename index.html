@@ -180,6 +180,7 @@
       <p style="margin:0" class="row">
         <button id="b-reveal">結果を表示する</button>
         <button class="ghost" id="b-png" hidden>画像で保存</button>
+        <button class="ghost" id="b-md" hidden>AI向けデータを保存</button>
         <button class="ghost" id="b-reset">投票をすべて消す</button>
       </p>
     </div>
@@ -302,6 +303,10 @@ async function openRoom(db) {
         say("");
       } catch (e) { say("画像を保存できませんでした。別のブラウザで試してください"); }
     });
+    $("b-md").addEventListener("click", () => {
+      const md = resultMarkdown(meta, Object.values(votes).filter(valid), !namesHidden);
+      download(new Blob([md], { type: "text/markdown;charset=utf-8" }), `tachiichi-${fileName(meta.title)}.md`);
+    });
     $("b-reset").addEventListener("click", async () => {
       const keys = Object.keys(votes);
       if (!keys.length && !revealed) { say("まだ投票がありません"); return; }
@@ -408,7 +413,7 @@ async function openRoom(db) {
       const myDot = [];
       for (const [id, v] of Object.entries(votes)) {
         if (!valid(v)) continue;
-        if (v.x !== 0 && v.y !== 0) q[(v.y > 0 ? 0 : 2) + (v.x > 0 ? 1 : 0)]++;
+        if (quadrant(v) >= 0) q[quadrant(v)]++;
         const isMine = !isHost && mine && id === mine.id;
         // 自分の点は最後に描いて、ほかの点に隠れないようにする
         if (isMine) myDot.push(dot(v.x, v.y, true, v.name));
@@ -451,6 +456,7 @@ async function openRoom(db) {
     if (isHost) {
       $("b-reveal").hidden = revealed;
       $("b-png").hidden = !revealed;
+      $("b-md").hidden = !revealed;
       $("qr-box").classList.toggle("small", qrSmall);
       $("b-qr-size").textContent = qrSmall ? "QRコードを大きく" : "QRコードを小さく";
       return;
@@ -575,6 +581,70 @@ function download(blob, name) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// 象限の番号を返す（0:左上, 1:右上, 2:左下, 3:右下）。軸上の票は -1
+const quadrant = (v) => v.x === 0 || v.y === 0 ? -1 : (v.y > 0 ? 0 : 2) + (v.x > 0 ? 1 : 0);
+
+// 結果を、AIにそのまま渡せるMarkdownにする（軸の意味と数値の読み方を添える）
+function resultMarkdown(meta, list, withNames) {
+  const esc = (s) => String(s).replace(/\|/g, "\\|").replace(/\s+/g, " ");
+  const qName = [
+    `左上（${meta.xl} × ${meta.yt}）`, `右上（${meta.xr} × ${meta.yt}）`,
+    `左下（${meta.xl} × ${meta.yb}）`, `右下（${meta.xr} × ${meta.yb}）`
+  ];
+  const q = [0, 0, 0, 0];
+  let onAxis = 0;
+  for (const v of list) { if (quadrant(v) >= 0) q[quadrant(v)]++; else onAxis++; }
+  const avg = list.length ? {
+    x: Math.round(list.reduce((s, v) => s + v.x, 0) / list.length),
+    y: Math.round(list.reduce((s, v) => s + v.y, 0) / list.length)
+  } : null;
+
+  const lines = [
+    `# 投票結果：${esc(meta.title)}`,
+    "",
+    "このファイルは、ワークショップで参加者が2つの軸の上で自分の立ち位置を投票した結果です（ツール名：たちいち）。",
+    "参加者は四象限マップ上の1点を選んで投票しています。分析や要約に使ってください。",
+    "",
+    "## 概要",
+    "",
+    `- お題：${esc(meta.title)}`,
+    `- 投票数：${list.length}人`,
+    `- 書き出した日時：${new Date().toLocaleString("ja-JP")}`,
+    `- 名前：${withNames ? "記載あり（名前なしで投票した人は「（なし）」）" : "記載なし（書き出し時に名前を伏せています）"}`,
+    "",
+    "## 軸と数値の読み方",
+    "",
+    `- 横軸 x：-100 が「${esc(meta.xl)}」、+100 が「${esc(meta.xr)}」`,
+    `- 縦軸 y：-100 が「${esc(meta.yb)}」、+100 が「${esc(meta.yt)}」`,
+    "- 0 はどちらにも寄っていない中立の位置です",
+    "- 寄り方の強さは、絶対値 1〜33 を「弱め」、34〜66 を「中くらい」、67〜100 を「強め」としています",
+    "",
+    "## 象限ごとの人数",
+    "",
+    "| 象限 | 人数 |",
+    "|---|---|",
+    ...qName.map((s, i) => `| ${esc(s)} | ${q[i]} |`),
+    `| 軸上（x か y が 0 で、どの象限にも入らない） | ${onAxis} |`,
+    "",
+    "## 全体の平均位置",
+    "",
+    avg ? `- x = ${avg.x}、y = ${avg.y}（${describe(avg, meta)}）` : "- 投票がありません",
+    "",
+    "## 全投票",
+    "",
+    withNames ? "| No | 名前 | x | y | 象限 | 位置の説明 |" : "| No | x | y | 象限 | 位置の説明 |",
+    withNames ? "|---|---|---|---|---|---|" : "|---|---|---|---|---|",
+    ...list.map((v, i) => {
+      const cells = [i + 1];
+      if (withNames) cells.push(typeof v.name === "string" && v.name ? esc(v.name) : "（なし）");
+      cells.push(v.x, v.y, quadrant(v) >= 0 ? esc(qName[quadrant(v)]) : "軸上", esc(describe(v, meta)));
+      return `| ${cells.join(" | ")} |`;
+    }),
+    ""
+  ];
+  return lines.join("\n");
 }
 
 // ファイル名に使えない文字を除く
