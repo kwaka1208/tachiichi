@@ -41,6 +41,11 @@
   #map.hide-names .nm { display: none; }
   #map.hide-names .pt:hover .nm, #map.hide-names .pt.open .nm { display: inline; }
   #map.hide-names .pt { cursor: pointer; }
+  /* ヒートマップ表示：点は薄くして、濃淡を主役にする */
+  #map .heat { fill: var(--dot); }
+  #map.heat .v { opacity: .3; }
+  #heat-legend { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--sub); margin: 0 0 8px; }
+  #heat-legend i { display: inline-block; width: 22px; height: 12px; background: var(--dot); border-radius: 2px; }
   #map .guide { stroke: var(--mine); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .6; }
   /* 位置を選んでいる間は、マップ上でスクロールや拡大が起きないようにする */
   body.picking #map { touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
@@ -136,6 +141,7 @@
     <div class="stage">
     <div class="stage-map">
     <svg id="map" viewBox="0 0 400 400" role="img" aria-label="投票結果の四象限マップ">
+      <g id="g-heat" shape-rendering="crispEdges"></g>
       <g id="g-count"></g>
       <line class="axis" x1="200" y1="10" x2="200" y2="390"/>
       <line class="axis" x1="10" y1="200" x2="390" y2="200"/>
@@ -147,8 +153,10 @@
     </svg>
     <p id="pos" aria-live="polite" hidden></p>
     <p class="sub" id="count" style="margin-top:8px"></p>
+    <p id="heat-legend" hidden>少ない <span id="heat-steps"></span> 多い</p>
     <div class="row" id="view-bar" hidden>
-      <button class="ghost" id="b-names" aria-pressed="false">名前を隠す</button>
+      <button class="ghost" id="b-heat" aria-pressed="false">ヒートマップで見る</button>
+      <button class="ghost" id="b-names" aria-pressed="true">名前を表示する</button>
     </div>
     </div>
 
@@ -256,7 +264,8 @@ async function openRoom(db) {
   let pos = mine ? { x: mine.x, y: mine.y } : null; // マップで選んでいる位置
   let dragging = false;
   let qrSmall = false;                 // 結果の公開中はQRコードを小さくする
-  let namesHidden = false;             // 結果で名前を隠しているか（この画面だけの設定）
+  let namesHidden = true;              // 結果で名前を隠しているか（この画面だけの設定。最初は隠す）
+  let heat = false;                    // 結果をヒートマップで見ているか（この画面だけの設定）
   const votesRef = ref(db, `rooms/${room}/votes`);
   const stateRef = ref(db, `rooms/${room}/state`);
 
@@ -357,6 +366,12 @@ async function openRoom(db) {
   }
 
   $("b-names").addEventListener("click", () => { namesHidden = !namesHidden; render(); });
+  $("b-heat").addEventListener("click", () => { heat = !heat; render(); });
+  $("heat-steps").replaceChildren(...HEAT_STEPS.map((o) => {
+    const i = document.createElement("i");
+    i.style.opacity = o;
+    return i;
+  }));
   // 名前を隠しているときは、タップした点の名前を出す（マウスがない端末向け）
   $("map").addEventListener("click", (ev) => {
     if (!revealed || !namesHidden) return;
@@ -377,9 +392,10 @@ async function openRoom(db) {
   function render() {
     const voted = !isHost && mine && votes[mine.id];
     const dots = $("g-dots"), counts = $("g-count");
-    dots.replaceChildren(); counts.replaceChildren();
+    dots.replaceChildren(); counts.replaceChildren(); $("g-heat").replaceChildren();
 
     if (revealed) {
+      if (heat) $("g-heat").append(...heatCells(Object.values(votes).filter(valid)));
       const q = [0, 0, 0, 0]; // 左上, 右上, 左下, 右下
       const myDot = [];
       for (const [id, v] of Object.entries(votes)) {
@@ -414,8 +430,13 @@ async function openRoom(db) {
     $("count").textContent = text;
 
     const hasNames = Object.values(votes).some((v) => valid(v) && typeof v.name === "string" && v.name);
-    $("view-bar").hidden = !revealed || !hasNames;
+    $("view-bar").hidden = !revealed;
+    $("b-names").hidden = !hasNames;
     $("map").classList.toggle("hide-names", namesHidden);
+    $("map").classList.toggle("heat", revealed && heat);
+    $("heat-legend").hidden = !revealed || !heat;
+    $("b-heat").textContent = heat ? "点で見る" : "ヒートマップで見る";
+    $("b-heat").setAttribute("aria-pressed", String(heat));
     $("b-names").textContent = namesHidden ? "名前を表示する" : "名前を隠す";
     $("b-names").setAttribute("aria-pressed", String(namesHidden));
 
@@ -484,6 +505,39 @@ function line(x1, y1, x2, y2) {
   l.setAttribute("x2", x2); l.setAttribute("y2", y2);
   l.setAttribute("class", "guide");
   return l;
+}
+
+// ヒートマップの濃さ（5段階）。凡例でも同じ値を使う
+const HEAT_STEPS = [.12, .27, .44, .62, .82];
+
+// 票の集まり具合を、マップを10px角のマスに区切って計算し、濃淡のマスとして返す
+// 1票ごとになだらかな山（ガウス分布）を置いて足し合わせ、いちばん高いところを最も濃くする
+function heatCells(list) {
+  if (!list.length) return [];
+  const size = 10, n = 400 / size, sigma = 15; // sigma は票の単位（-100〜100）での広がり
+  const grid = [];
+  let max = 0;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const x = ((c + .5) * size - 200) / 1.8, y = (200 - (r + .5) * size) / 1.8;
+      let d = 0;
+      for (const v of list) d += Math.exp(-((v.x - x) ** 2 + (v.y - y) ** 2) / (2 * sigma * sigma));
+      grid.push(d);
+      if (d > max) max = d;
+    }
+  }
+  const cells = [];
+  grid.forEach((d, i) => {
+    const level = Math.ceil(d / max * HEAT_STEPS.length) - 1;
+    if (d / max < .08) return; // ほとんど票のないところは塗らない
+    const rect = document.createElementNS(SVG, "rect");
+    rect.setAttribute("x", (i % n) * size); rect.setAttribute("y", Math.floor(i / n) * size);
+    rect.setAttribute("width", size); rect.setAttribute("height", size);
+    rect.setAttribute("class", "heat");
+    rect.setAttribute("fill-opacity", HEAT_STEPS[level]);
+    cells.push(rect);
+  });
+  return cells;
 }
 
 function valid(v) {
