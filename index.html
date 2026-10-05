@@ -179,6 +179,7 @@
     <div class="panel" id="host-panel" hidden>
       <p style="margin:0" class="row">
         <button id="b-reveal">結果を表示する</button>
+        <button class="ghost" id="b-png" hidden>画像で保存</button>
         <button class="ghost" id="b-reset">投票をすべて消す</button>
       </p>
     </div>
@@ -293,6 +294,13 @@ async function openRoom(db) {
       if (!Object.values(votes).some(valid)) { say("まだ投票がありません"); return; }
       try { await set(stateRef, { revealed: true }); say(""); }
       catch (e) { say("結果を表示できませんでした。通信状況を確認してください"); }
+    });
+    $("b-png").addEventListener("click", async () => {
+      const n = Object.values(votes).filter(valid).length;
+      try {
+        await savePng(meta.title, `${n}人の結果`, heat, `tachiichi-${fileName(meta.title)}.png`);
+        say("");
+      } catch (e) { say("画像を保存できませんでした。別のブラウザで試してください"); }
     });
     $("b-reset").addEventListener("click", async () => {
       const keys = Object.keys(votes);
@@ -442,6 +450,7 @@ async function openRoom(db) {
 
     if (isHost) {
       $("b-reveal").hidden = revealed;
+      $("b-png").hidden = !revealed;
       $("qr-box").classList.toggle("small", qrSmall);
       $("b-qr-size").textContent = qrSmall ? "QRコードを大きく" : "QRコードを小さく";
       return;
@@ -485,6 +494,91 @@ async function drawQr(url) {
     say("QRコードを表示できませんでした。URLを共有するかコピーして伝えてください");
   }
 }
+
+// 画像に書き出すときの見た目。画像の中では外のCSSが効かないので、色は値で書く
+const EXPORT_CSS = `
+  text { font-family: "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Noto Sans JP", sans-serif; font-weight: 700; }
+  .ttl { fill: #1D2B36; }
+  .foot { font-size: 12px; fill: #5C6B75; }
+  #map .axis { stroke: #1D2B36; stroke-width: 1.5; }
+  #map .lab { font-size: 13px; fill: #1D2B36; paint-order: stroke; stroke: #fff; stroke-width: 4px; }
+  #map .qn { font-size: 44px; fill: #1D2B36; opacity: .1; text-anchor: middle; dominant-baseline: central; }
+  #map .v { fill: #1F8A84; opacity: .55; }
+  #map.heat .v { opacity: .3; }
+  #map .heat, .lg { fill: #1F8A84; }
+  #map .me { fill: #E4572E; stroke: #fff; stroke-width: 2; }
+  #map .nm { font-size: 11px; fill: #1D2B36; paint-order: stroke; stroke: #fff; stroke-width: 3px; dominant-baseline: central; }
+  #map .nm.mine { fill: #E4572E; }
+  #map.hide-names .nm { display: none; }
+  #map.hide-names .pt.open .nm { display: inline; }
+`;
+
+// いま表示しているマップに、お題と人数を添えてPNGで保存する
+async function savePng(title, foot, withLegend, name) {
+  const W = 440, H = 500, scale = 3;
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W * scale); svg.setAttribute("height", H * scale);
+  const style = document.createElementNS(SVG, "style");
+  style.textContent = EXPORT_CSS;
+  const bg = document.createElementNS(SVG, "rect");
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#FBFCFA");
+  // 長いお題は文字を小さくして、横幅に収める
+  const t = text(20, 36, title, "ttl");
+  t.setAttribute("font-size", Math.min(20, 400 / title.length));
+  // マップは白地と枠を敷いてから、画面のものを複製して置く
+  const frame = document.createElementNS(SVG, "rect");
+  frame.setAttribute("x", 20); frame.setAttribute("y", 56); frame.setAttribute("width", 400); frame.setAttribute("height", 400);
+  frame.setAttribute("rx", 6); frame.setAttribute("fill", "#fff"); frame.setAttribute("stroke", "#1D2B36"); frame.setAttribute("stroke-width", 2);
+  const map = $("map").cloneNode(true);
+  for (const [k, v] of [["x", 20], ["y", 56], ["width", 400], ["height", 400]]) map.setAttribute(k, v);
+  svg.append(style, bg, t, frame, map, text(20, 482, foot, "foot"));
+  if (withLegend) {
+    // 右端から「多い」、濃さの四角、「少ない」の順に並べる
+    const right = 420, hiW = 24, gap = 4, step = 18;
+    const boxEnd = right - hiW - gap, boxStart = boxEnd - HEAT_STEPS.length * step + 2;
+    const lo = text(boxStart - gap, 482, "少ない", "foot");
+    const hi = text(right, 482, "多い", "foot");
+    lo.setAttribute("text-anchor", "end"); hi.setAttribute("text-anchor", "end");
+    svg.append(lo, hi);
+    HEAT_STEPS.forEach((o, i) => {
+      const r = document.createElementNS(SVG, "rect");
+      r.setAttribute("x", boxStart + i * step); r.setAttribute("y", 472);
+      r.setAttribute("width", step - 2); r.setAttribute("height", 10); r.setAttribute("rx", 2);
+      r.setAttribute("class", "lg"); r.setAttribute("fill-opacity", o);
+      svg.append(r);
+    });
+  }
+
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = W * scale; canvas.height = H * scale;
+  canvas.getContext("2d").drawImage(img, 0, 0);
+  const blob = await new Promise((ok, ng) => canvas.toBlob((b) => b ? ok(b) : ng(new Error("toBlob")), "image/png"));
+  download(blob, name);
+}
+
+function text(x, y, s, cls) {
+  const t = document.createElementNS(SVG, "text");
+  t.setAttribute("x", x); t.setAttribute("y", y); t.setAttribute("class", cls);
+  t.textContent = s;
+  return t;
+}
+
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ファイル名に使えない文字を除く
+const fileName = (s) => s.replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40);
 
 const clamp = (n) => Math.max(-100, Math.min(100, n));
 
