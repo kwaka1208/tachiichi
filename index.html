@@ -137,8 +137,8 @@
     <fieldset>
       <legend>縦の軸</legend>
       <div class="pair">
-        <div><label for="f-yb">下</label><input type="text" id="f-yb" maxlength="12" placeholder="例：安定"></div>
         <div><label for="f-yt">上</label><input type="text" id="f-yt" maxlength="12" placeholder="例：挑戦"></div>
+        <div><label for="f-yb">下</label><input type="text" id="f-yb" maxlength="12" placeholder="例：安定"></div>
       </div>
     </fieldset>
     <label class="check"><input type="checkbox" id="f-anon"> 名前なしの投票を許可する</label>
@@ -237,7 +237,7 @@ function openCreate(db) {
   show("v-create");
   $("b-create").addEventListener("click", async () => {
     const meta = {};
-    for (const k of ["title", "xl", "xr", "yb", "yt"]) {
+    for (const k of ["title", "xl", "xr", "yt", "yb"]) {
       meta[k] = $("f-" + k).value.trim();
       if (!meta[k]) { say("すべての欄を入力してください"); $("f-" + k).focus(); return; }
     }
