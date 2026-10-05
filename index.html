@@ -330,8 +330,8 @@ async function openRoom(db) {
       }
     };
     $("b-copy").addEventListener("click", copy);
-    // スマートフォンなど共有メニューがある環境では「URLを共有」を出す
-    if (navigator.share) {
+    // スマートフォンなど、タッチ操作が主で共有メニューがある環境だけ「URLを共有」を出す
+    if (navigator.share && matchMedia("(hover: none) and (pointer: coarse)").matches) {
       show("b-share");
       $("b-share").addEventListener("click", async () => {
         try { await navigator.share({ title: meta.title + "｜たちいち", url }); }
