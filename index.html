@@ -170,6 +170,7 @@
       <text class="lab" id="l-yb" x="207" y="390" text-anchor="start"></text>
     </svg>
     <p id="pos" aria-live="polite" hidden></p>
+    <p class="sub" id="voters" style="margin-top:8px" hidden></p>
     <p class="sub" id="count" style="margin-top:8px"></p>
     <p id="heat-legend" hidden>少ない <span id="heat-steps"></span> 多い</p>
     <div class="row" id="view-bar" hidden>
@@ -496,6 +497,9 @@ async function openRoom(db) {
     else if (anon) text = `${until}マップで位置を選んでから「投票する」を押してください。名前は入れなくてもかまいません`;
     else text = `${until}名前を入れ、マップで位置を選んでから「投票する」を押してください`;
     $("count").textContent = text;
+    // 参加者にも、投票の前後でいまの投票人数を別の行で見せる
+    $("voters").hidden = revealed || isHost;
+    $("voters").textContent = `いま${n}人が投票しています。`;
 
     const hasNames = Object.values(votes).some((v) => valid(v) && typeof v.name === "string" && v.name);
     $("view-bar").hidden = !revealed;
