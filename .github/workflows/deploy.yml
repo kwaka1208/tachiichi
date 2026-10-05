@@ -1,0 +1,52 @@
+# main に push したとき（または手動実行したとき）に GitHub Pages へ公開する。
+# config.js はリポジトリに含めず、Secret の FIREBASE_CONFIG（設定値のJSON）から生成する。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 公開するファイルを用意する
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: |
+          mkdir _site
+          cp index.html _site/
+          # JSONとして正しいか、必要な項目がそろっているかを確かめてから config.js を書き出す
+          node -e '
+            const raw = process.env.FIREBASE_CONFIG;
+            if (!raw) { console.error("Secret FIREBASE_CONFIG が登録されていません"); process.exit(1); }
+            let c;
+            try { c = JSON.parse(raw); } catch (e) { console.error("FIREBASE_CONFIG がJSONとして読めません"); process.exit(1); }
+            const missing = ["apiKey", "authDomain", "databaseURL", "projectId", "appId"].filter((k) => !c[k]);
+            if (missing.length) { console.error("FIREBASE_CONFIG に足りない項目があります: " + missing.join(", ")); process.exit(1); }
+            require("fs").writeFileSync("_site/config.js", "export const firebaseConfig = " + JSON.stringify(c, null, 2) + ";\n");
+          '
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
