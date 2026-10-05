@@ -38,6 +38,8 @@
   .panel p:last-child, .panel ul:last-child { margin-bottom: 0; }
   nav ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
   .back { margin-top: 40px; }
+  .site-footer { margin: 0 auto; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); text-align: center; color: var(--sub); font-size: .9rem; }
+  .site-footer p { margin: 0; }
 </style>
 </head>
 <body>
@@ -124,5 +126,9 @@
   <p class="back"><a href="./">たちいちのトップページへ</a></p>
 
 </main>
+
+<footer class="site-footer">
+  <p>© <a href="https://crssrds.jp" target="_blank" rel="noopener">crossroads inc.</a></p>
+</footer>
 </body>
 </html>

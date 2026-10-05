@@ -115,6 +115,8 @@
   #copy-msg:empty { display: none; }
   #msg { min-height: 1.7em; margin-top: 10px; font-weight: 700; color: var(--mine); }
   [hidden] { display: none !important; }
+  .site-footer { margin: 0 auto; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); text-align: center; color: var(--sub); font-size: .9rem; }
+  .site-footer p { margin: 0; }
 </style>
 </head>
 <body>
@@ -212,6 +214,10 @@
 
   <p id="msg" role="status"></p>
 </main>
+
+<footer class="site-footer">
+  <p>© <a href="https://crssrds.jp" target="_blank" rel="noopener">crossroads inc.</a></p>
+</footer>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
