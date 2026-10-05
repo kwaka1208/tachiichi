@@ -23,7 +23,7 @@
     line-height: 1.7;
   }
   main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
-  body.host main { max-width: min(92vh, 960px); }
+  body.host main { max-width: 1400px; }
   h1 { font-size: 1.35rem; line-height: 1.4; margin: 0 0 12px; font-weight: 700; }
   body.host h1 { font-size: 1.9rem; text-align: center; }
   p { margin: 0 0 12px; }
@@ -73,6 +73,19 @@
   button:focus-visible, input:focus-visible { outline: 3px solid var(--mine); outline-offset: 2px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .url { flex: 1 1 240px; word-break: break-all; font-size: 1.05rem; font-weight: 700; }
+  /* 進行役：横長の画面ではマップとQRコードを左右に、縦長の画面では上下に並べる */
+  .stage { display: grid; gap: 24px; }
+  body.host .stage-map { width: min(100%, 78vh); margin: 0 auto; }
+  @media (min-width: 900px) and (min-aspect-ratio: 1/1) {
+    body.host .stage { grid-template-columns: min(78vh, 60vw) minmax(260px, 1fr); justify-content: center; align-items: start; }
+    body.host .stage-map { width: auto; margin: 0; }
+  }
+  #qr-box { background: var(--panel); border-radius: 6px; padding: 20px; text-align: center; }
+  #qr-box .row { justify-content: center; }
+  .qr-lead { font-weight: 700; font-size: 1.2rem; }
+  #qr { display: block; width: min(100%, 420px); height: auto; margin: 0 auto 12px; background: #fff; }
+  #qr-box.small #qr { width: 140px; }
+  #qr-box.small .qr-lead { font-size: 1rem; }
   #msg { min-height: 1.7em; margin-top: 10px; font-weight: 700; color: var(--mine); }
   [hidden] { display: none !important; }
 </style>
@@ -113,6 +126,8 @@
       <label for="f-name">名前</label>
       <input type="text" id="f-name" maxlength="10" placeholder="例：わか" autocomplete="nickname">
     </div>
+    <div class="stage">
+    <div class="stage-map">
     <svg id="map" viewBox="0 0 400 400" role="img" aria-label="投票結果の四象限マップ">
       <g id="g-count"></g>
       <line class="axis" x1="200" y1="10" x2="200" y2="390"/>
@@ -125,18 +140,26 @@
     </svg>
     <p id="pos" aria-live="polite" hidden></p>
     <p class="sub" id="count" style="margin-top:8px"></p>
+    </div>
+
+    <aside id="qr-box" hidden>
+      <p class="qr-lead">スマートフォンで読み取って参加</p>
+      <svg id="qr" role="img" aria-label="参加用URLのQRコード"></svg>
+      <p class="url" id="share-url"></p>
+      <div class="row">
+        <button class="ghost" id="b-share" hidden>URLを共有</button>
+        <button class="ghost" id="b-copy">URLをコピー</button>
+        <button class="ghost" id="b-qr-size"></button>
+      </div>
+    </aside>
+    </div>
 
     <div id="vote-bar" hidden>
       <button class="wide" id="b-vote">投票する</button>
     </div>
 
     <div class="panel" id="host-panel" hidden>
-      <p class="sub">参加者にこのURLを伝えてください</p>
-      <div class="row">
-        <span class="url" id="share-url"></span>
-        <button class="ghost" id="b-copy">URLをコピー</button>
-      </div>
-      <p style="margin:16px 0 0" class="row">
+      <p style="margin:0" class="row">
         <button id="b-reveal">結果を表示する</button>
         <button class="ghost" id="b-reset">投票をすべて消す</button>
       </p>
@@ -220,18 +243,30 @@ async function openRoom(db) {
   let revealed = false;                // 進行役が結果を公開したか
   let pos = mine ? { x: mine.x, y: mine.y } : null; // マップで選んでいる位置
   let dragging = false;
+  let qrSmall = false;                 // 結果の公開中はQRコードを小さくする
   const votesRef = ref(db, `rooms/${room}/votes`);
   const stateRef = ref(db, `rooms/${room}/state`);
 
   if (isHost) {
     document.body.classList.add("host");
-    show("host-panel");
+    show("host-panel"); show("qr-box");
     const url = `${location.origin}${location.pathname}?room=${room}`;
     $("share-url").textContent = url;
-    $("b-copy").addEventListener("click", async () => {
+    drawQr(url);
+    const copy = async () => {
       try { await navigator.clipboard.writeText(url); say("URLをコピーしました"); }
       catch (e) { say("コピーできませんでした。URLを長押しして選択してください"); }
-    });
+    };
+    $("b-copy").addEventListener("click", copy);
+    // スマートフォンなど共有メニューがある環境では「URLを共有」を出す
+    if (navigator.share) {
+      show("b-share");
+      $("b-share").addEventListener("click", async () => {
+        try { await navigator.share({ title: meta.title + "｜たちいち", url }); }
+        catch (e) { if (e.name !== "AbortError") copy(); }
+      });
+    }
+    $("b-qr-size").addEventListener("click", () => { qrSmall = !qrSmall; render(); });
     $("b-reveal").addEventListener("click", async () => {
       if (!Object.values(votes).some(valid)) { say("まだ投票がありません"); return; }
       try { await set(stateRef, { revealed: true }); say(""); }
@@ -311,7 +346,7 @@ async function openRoom(db) {
     () => say("結果を読み込めませんでした。通信状況を確認してください"));
   onValue(stateRef, (snap) => {
     const next = !!(snap.val() && snap.val().revealed === true);
-    if (next !== revealed) say("");
+    if (next !== revealed) { say(""); qrSmall = next; }
     revealed = next;
     render();
   }, () => say("結果を読み込めませんでした。通信状況を確認してください"));
@@ -354,7 +389,12 @@ async function openRoom(db) {
     else text = "名前を入れ、マップで位置を選んでから「投票する」を押してください";
     $("count").textContent = text;
 
-    if (isHost) { $("b-reveal").hidden = revealed; return; }
+    if (isHost) {
+      $("b-reveal").hidden = revealed;
+      $("qr-box").classList.toggle("small", qrSmall);
+      $("b-qr-size").textContent = qrSmall ? "QRコードを大きく" : "QRコードを小さく";
+      return;
+    }
 
     document.body.classList.toggle("picking", !revealed);
     $("name-box").hidden = revealed;
@@ -367,6 +407,31 @@ async function openRoom(db) {
       : "あなたの位置を選ぶマップ。矢印キーでも動かせます。" + $("pos").textContent);
     const moved = voted && pos && (pos.x !== mine.x || pos.y !== mine.y);
     $("b-vote").textContent = !voted ? "投票する" : moved ? "この位置に投票し直す" : "投票済み（動かすと投票し直せます）";
+  }
+}
+
+// 参加用URLのQRコードを描く（ライブラリは進行役の画面でだけ読み込む）
+async function drawQr(url) {
+  try {
+    const { default: qrcode } = await import("https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.mjs");
+    const qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    const n = qr.getModuleCount(), quiet = 4;
+    let d = "";
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++)
+        if (qr.isDark(r, c)) d += `M${c + quiet} ${r + quiet}h1v1h-1z`;
+    const path = document.createElementNS(SVG, "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "#000");
+    const svg = $("qr");
+    svg.setAttribute("viewBox", `0 0 ${n + quiet * 2} ${n + quiet * 2}`);
+    svg.setAttribute("shape-rendering", "crispEdges");
+    svg.replaceChildren(path);
+  } catch (e) {
+    $("qr").hidden = true;
+    say("QRコードを表示できませんでした。URLを共有するかコピーして伝えてください");
   }
 }
 
