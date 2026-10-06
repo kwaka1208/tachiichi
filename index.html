@@ -225,12 +225,12 @@
 </main>
 
 <footer class="site-footer">
-  <p>© <a href="https://crssrds.jp" target="_blank" rel="noopener">crossroads inc.</a></p>
+  <p>v1.0 ・ © <a href="https://crssrds.jp" target="_blank" rel="noopener">crossroads inc.</a></p>
 </footer>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, get, set, push, update, onValue }
+import { getDatabase, ref, get, set, push, update, onValue, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -299,6 +299,7 @@ function openCreate(db) {
       meta.deadline = deadline;
     }
     meta.owner = uid;
+    meta.createdAt = serverTimestamp(); // 一度も締め切られなかった投票を、作成から30日で削除するために使う
     const id = randomId(8);
     const key = randomId(20);          // 進行役用URLの秘密キー（room IDとは無関係に作る）
     try {
@@ -390,7 +391,8 @@ async function openRoom(db) {
     $("b-qr-size").addEventListener("click", () => { qrSmall = !qrSmall; render(); });
     $("b-reveal").addEventListener("click", async () => {
       if (!Object.values(votes).some(valid)) { say("まだ投票がありません"); return; }
-      try { await set(stateRef, { revealed: true }); say(""); }
+      // 受付を終えた時刻を残しておき、そこから2週間で投票を削除する（scripts/cleanup.mjs）
+      try { await set(stateRef, { revealed: true, closedAt: serverTimestamp() }); say(""); }
       catch (e) { say("結果を表示できませんでした。通信状況を確認してください"); }
     });
     $("b-png").addEventListener("click", async () => {
@@ -414,6 +416,7 @@ async function openRoom(db) {
       // 票の削除と非公開への切り替えを、まとめて1回で書き込む
       const changes = Object.fromEntries(keys.map((k) => [`votes/${k}`, null]));
       changes["state/revealed"] = null;
+      changes["state/closedAt"] = null;
       try {
         await update(ref(db, `rooms/${room}`), changes);
         say("投票をすべて消しました");

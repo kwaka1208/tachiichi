@@ -25,11 +25,13 @@
           "owner": { ".validate": "newData.val() === auth.uid" },
           "anon": { ".validate": "newData.isBoolean()" },
           "deadline": { ".validate": "newData.isNumber()" },
+          "createdAt": { ".validate": "newData.val() === now" },
           "$f": { ".validate": "newData.isString() && newData.val().length <= 40" }
         },
         "state": {
           ".write": "auth != null && auth.uid === root.child('rooms').child($room).child('meta/owner').val()",
           "revealed": { ".validate": "newData.isBoolean()" },
+          "closedAt": { ".validate": "newData.val() === now" },
           "$other": { ".validate": false }
         },
         "votes": {

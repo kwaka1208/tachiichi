@@ -1,0 +1,37 @@
+# 期限を過ぎた投票を1日1回削除する（中身は scripts/cleanup.mjs）。
+# Secret の FIREBASE_SERVICE_ACCOUNT（サービスアカウントの鍵のJSON）と FIREBASE_CONFIG を使う。
+# 手動実行のときは「試しに動かす」を選ぶと、何を消すかを表示するだけで書き込まない。
+name: Clean up expired boards
+
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 毎日 3:00（日本時間）
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 試しに動かす（削除しない）
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: firebase-admin を入れる
+        run: npm install --no-save --prefix scripts firebase-admin@13
+
+      - name: 期限を過ぎた投票を削除する
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: node scripts/cleanup.mjs
