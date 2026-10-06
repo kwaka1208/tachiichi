@@ -216,6 +216,7 @@
         <button class="ghost" id="b-md" hidden>AI向けデータを保存</button>
         <button class="ghost" id="b-reset">投票をすべて消す</button>
       </p>
+      <label class="check" id="dl-names-box" style="margin-top:12px" hidden><input type="checkbox" id="f-dl-names"> 名前を入れて保存する</label>
     </div>
 
     <p class="sub help-link"><a href="help.html" target="_blank" rel="noopener">たちいちの使い方</a></p>
@@ -398,12 +399,12 @@ async function openRoom(db) {
     $("b-png").addEventListener("click", async () => {
       const n = Object.values(votes).filter(valid).length;
       try {
-        await savePng(meta.title, `${n}人の結果`, heat, `tachiichi-${fileName(meta.title)}.png`);
+        await savePng(meta.title, `${n}人の結果`, heat, $("f-dl-names").checked, `tachiichi-${fileName(meta.title)}.png`);
         say("");
       } catch (e) { say("画像を保存できませんでした。別のブラウザで試してください"); }
     });
     $("b-md").addEventListener("click", () => {
-      const md = resultMarkdown(meta, Object.values(votes).filter(valid), !namesHidden);
+      const md = resultMarkdown(meta, Object.values(votes).filter(valid), $("f-dl-names").checked);
       download(new Blob([md], { type: "text/markdown;charset=utf-8" }), `tachiichi-${fileName(meta.title)}.md`);
     });
     $("b-reset").addEventListener("click", async () => {
@@ -586,6 +587,7 @@ async function openRoom(db) {
       $("b-reveal").hidden = revealed || !canManage;
       $("b-png").hidden = !revealed;
       $("b-md").hidden = !revealed;
+      $("dl-names-box").hidden = !revealed || !hasNames;
       $("qr-box").classList.toggle("small", qrSmall);
       $("b-qr-size").textContent = qrSmall ? "QRコードを大きく" : "QRコードを小さく";
       return;
@@ -649,7 +651,7 @@ const EXPORT_CSS = `
 `;
 
 // いま表示しているマップに、お題と人数を添えてPNGで保存する
-async function savePng(title, foot, withLegend, name) {
+async function savePng(title, foot, withLegend, withNames, name) {
   const W = 440, H = 500, scale = 3;
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -667,6 +669,9 @@ async function savePng(title, foot, withLegend, name) {
   frame.setAttribute("rx", 6); frame.setAttribute("fill", "#fff"); frame.setAttribute("stroke", "#1D2B36"); frame.setAttribute("stroke-width", 2);
   const map = $("map").cloneNode(true);
   for (const [k, v] of [["x", 20], ["y", 56], ["width", 400], ["height", 400]]) map.setAttribute(k, v);
+  // 名前を入れるかは画面の表示に関係なく、保存時の選択だけで決める
+  map.classList.toggle("hide-names", !withNames);
+  map.querySelectorAll(".pt.open").forEach((g) => g.classList.remove("open"));
   svg.append(style, bg, t, frame, map, text(20, 482, foot, "foot"));
   if (withLegend) {
     // 右端から「多い」、濃さの四角、「少ない」の順に並べる
