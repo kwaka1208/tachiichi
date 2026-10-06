@@ -1,4 +1,4 @@
-# 期限を過ぎた投票を1日1回削除する（中身は scripts/cleanup.mjs）。
+# 期限を過ぎたボードを1日1回削除する（中身は scripts/cleanup.mjs）。
 # Secret の FIREBASE_SERVICE_ACCOUNT（サービスアカウントの鍵のJSON）と FIREBASE_CONFIG を使う。
 # 手動実行のときは「試しに動かす」を選ぶと、何を消すかを表示するだけで書き込まない。
 name: Clean up expired boards
@@ -29,7 +29,7 @@ jobs:
       - name: firebase-admin を入れる
         run: npm install --no-save --prefix scripts firebase-admin@13
 
-      - name: 期限を過ぎた投票を削除する
+      - name: 期限を過ぎたボードを削除する
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}

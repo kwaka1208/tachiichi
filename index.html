@@ -159,7 +159,7 @@
     <label for="f-deadline">締め切り（入れなくてもかまいません）</label>
     <input type="datetime-local" id="f-deadline">
     <p class="sub">締め切りを入れると、その時刻に投票が締め切られ、結果が表示されます。入れないときは進行役が「結果を表示する」を押したときに締め切ります。</p>
-    <p style="margin-top:20px"><button class="wide" id="b-create">投票をつくる</button></p>
+    <p style="margin-top:20px"><button class="wide" id="b-create">ボードをつくる</button></p>
   </section>
 
   <section id="v-room" hidden>
@@ -209,7 +209,7 @@
     </div>
 
     <div class="panel" id="host-panel" hidden>
-      <p class="sub" id="view-only" hidden>この端末では表示だけができます。結果の表示や投票の削除は、投票をつくったブラウザで行ってください。</p>
+      <p class="sub" id="view-only" hidden>この端末では表示だけができます。結果の表示や投票の削除は、ボードをつくったブラウザで行ってください。</p>
       <p style="margin:0" class="row">
         <button id="b-reveal">結果を表示する</button>
         <button class="ghost" id="b-png" hidden>画像で保存</button>
@@ -257,7 +257,7 @@ if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWit
 } else {
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
-  // 投票をつくった人だけが進行役の操作をでき、参加者は自分の票だけを書き換えられるよう、
+  // ボードをつくった人だけが進行役の操作をでき、参加者は自分の票だけを書き換えられるよう、
   // ブラウザごとに匿名でサインインする（一度サインインしたブラウザでは同じIDが使われる）
   try {
     uid = (await signInAnonymously(getAuth(app))).user.uid;
@@ -271,11 +271,11 @@ if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWit
   }
 }
 
-// 秘密キーから投票を探して、進行役の画面を開く
+// 秘密キーからボードを探して、進行役の画面を開く
 async function openHost(db) {
   try {
     const host = (await get(ref(db, `hosts/${hostKey}`))).val();
-    if (!host || typeof host.room !== "string") { say("この投票は見つかりません。URLを確認してください"); return; }
+    if (!host || typeof host.room !== "string") { say("このボードは見つかりません。URLを確認してください"); return; }
     room = host.room;
   } catch (e) {
     say("読み込めませんでした。通信状況を確認して、もう一度開いてください"); return;
@@ -283,7 +283,7 @@ async function openHost(db) {
   openRoom(db);
 }
 
-/* ---------- 投票をつくる ---------- */
+/* ---------- ボードをつくる ---------- */
 function openCreate(db) {
   show("v-create");
   $("b-create").addEventListener("click", async () => {
@@ -299,15 +299,15 @@ function openCreate(db) {
       meta.deadline = deadline;
     }
     meta.owner = uid;
-    meta.createdAt = serverTimestamp(); // 一度も締め切られなかった投票を、作成から30日で削除するために使う
+    meta.createdAt = serverTimestamp(); // 一度も締め切られなかったボードを、作成から30日で削除するために使う
     const id = randomId(8);
     const key = randomId(20);          // 進行役用URLの秘密キー（room IDとは無関係に作る）
     try {
-      // 投票の中身と、秘密キーから投票を引くための対応を、まとめて1回で書き込む
+      // ボードの中身と、秘密キーからボードを引くための対応を、まとめて1回で書き込む
       await update(ref(db), { [`rooms/${id}/meta`]: meta, [`hosts/${key}`]: { room: id } });
       location.href = `${location.pathname}?host=${key}`;
     } catch (e) {
-      say("投票をつくれませんでした。通信状況とFirebaseの設定を確認してください");
+      say("ボードをつくれませんでした。通信状況とFirebaseの設定を確認してください");
     }
   });
 }
@@ -326,7 +326,7 @@ async function openRoom(db) {
   } catch (e) {
     say("読み込めませんでした。通信状況を確認して、もう一度開いてください"); return;
   }
-  if (!meta) { say("この投票は見つかりません。URLを確認してください"); return; }
+  if (!meta) { say("このボードは見つかりません。URLを確認してください"); return; }
 
   document.title = meta.title + "｜たちいち";
   $("title").textContent = meta.title;
@@ -334,7 +334,7 @@ async function openRoom(db) {
   show("v-room");
 
   const anon = meta.anon === true;     // 名前なしの投票を許可しているか
-  const canManage = isHost && meta.owner === uid; // 結果の表示や削除ができるか（投票をつくったブラウザだけ）
+  const canManage = isHost && meta.owner === uid; // 結果の表示や削除ができるか（ボードをつくったブラウザだけ）
   const storeKey = "tachiichi-" + room;
   const nameKey = "tachiichi-name";
   let mine = loadMine(storeKey);       // { id, x, y } 自分の投票
@@ -391,7 +391,7 @@ async function openRoom(db) {
     $("b-qr-size").addEventListener("click", () => { qrSmall = !qrSmall; render(); });
     $("b-reveal").addEventListener("click", async () => {
       if (!Object.values(votes).some(valid)) { say("まだ投票がありません"); return; }
-      // 受付を終えた時刻を残しておき、そこから2週間で投票を削除する（scripts/cleanup.mjs）
+      // 受付を終えた時刻を残しておき、そこから2週間でボードを削除する（scripts/cleanup.mjs）
       try { await set(stateRef, { revealed: true, closedAt: serverTimestamp() }); say(""); }
       catch (e) { say("結果を表示できませんでした。通信状況を確認してください"); }
     });

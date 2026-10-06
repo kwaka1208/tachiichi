@@ -1,7 +1,7 @@
 # セットアップ
 1. Firebaseコンソールでプロジェクトを作り、Realtime Database を作成する
 2. config.example.js を config.js という名前でコピーし、「ウェブアプリを追加」で表示される設定値に書き換える（config.js は .gitignore で除外している）
-3. Authentication の「Sign-in method」で「匿名」を有効にする（投票をつくった人だけが進行役の操作をでき、参加者が自分の票だけを書き換えられるようにするため）
+3. Authentication の「Sign-in method」で「匿名」を有効にする（ボードをつくった人だけが進行役の操作をでき、参加者が自分の票だけを書き換えられるようにするため）
 4. Realtime Database の「ルール」に以下を貼り付けて公開する
 
   ```json

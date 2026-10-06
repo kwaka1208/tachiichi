@@ -1,7 +1,7 @@
-// 期限を過ぎた投票（ボード）を Realtime Database から削除する。GitHub Actions から1日1回動かす。
-// - 受付を終えた投票：終えた時刻（結果の表示か締め切りの早いほう）から14日で削除
-// - 一度も受付を終えていない投票：作成から30日で削除（締め切りが先の日時なら残す）
-// - 時刻の記録がない古い投票：このスクリプトが初めて見つけた時刻を記録し、そこから数える
+// 期限を過ぎたボードを Realtime Database から削除する。GitHub Actions から1日1回動かす。
+// - 受付を終えたボード：終えた時刻（結果の表示か締め切りの早いほう）から14日で削除
+// - 一度も受付を終えていないボード：作成から30日で削除（締め切りが先の日時なら残す）
+// - 時刻の記録がない古いボード：このスクリプトが初めて見つけた時刻を記録し、そこから数える
 // 環境変数：FIREBASE_SERVICE_ACCOUNT（サービスアカウントの鍵のJSON）、FIREBASE_CONFIG（databaseURL を含むJSON）
 // DRY_RUN=true のときは、何を消すかを表示するだけで書き込まない。
 import { initializeApp, cert } from "firebase-admin/app";
@@ -37,7 +37,7 @@ for (const [id, r] of Object.entries(rooms)) {
   const ends = [];
   if (state.revealed === true) {
     if (typeof state.closedAt === "number") ends.push(state.closedAt);
-    else changes[`rooms/${id}/state/closedAt`] = now; // 古い投票：今を終了時刻とみなす
+    else changes[`rooms/${id}/state/closedAt`] = now; // 古いボード：今を終了時刻とみなす
   }
   if (deadline !== null && deadline <= now) ends.push(deadline);
 
@@ -51,29 +51,29 @@ for (const [id, r] of Object.entries(rooms)) {
   } else if (typeof meta.createdAt === "number") {
     expired = now - meta.createdAt >= OPEN_TTL;
   } else {
-    changes[`rooms/${id}/meta/createdAt`] = now; // 古い投票：今を作成時刻とみなす
+    changes[`rooms/${id}/meta/createdAt`] = now; // 古いボード：今を作成時刻とみなす
     expired = false;
   }
 
   if (expired) {
     removed.push(`${id}（${meta.title || "無題"}）`);
-    // 同じ投票の中の書き込みと、投票ごとの削除は一緒に送れないので、記録のほうを取り消す
+    // 同じボードの中の書き込みと、ボードごとの削除は一緒に送れないので、記録のほうを取り消す
     delete changes[`rooms/${id}/state/closedAt`];
     delete changes[`rooms/${id}/meta/createdAt`];
     changes[`rooms/${id}`] = null;
   }
 }
 
-// 削除する投票を指している進行役用の秘密キーも消す。行き先のない秘密キーもここで片づける
+// 削除するボードを指している進行役用の秘密キーも消す。行き先のない秘密キーもここで片づける
 for (const [key, h] of Object.entries(hosts)) {
   const target = h && h.room;
   if (!target || !rooms[target] || changes[`rooms/${target}`] === null) changes[`hosts/${key}`] = null;
 }
 
-console.log(`投票 ${Object.keys(rooms).length}件のうち、削除 ${removed.length}件`);
+console.log(`ボード ${Object.keys(rooms).length}件のうち、削除 ${removed.length}件`);
 for (const line of removed) console.log(`  削除：${line}`);
 const marks = Object.entries(changes).filter(([, v]) => v !== null).length;
-if (marks) console.log(`時刻の記録がない投票 ${marks}件に、今の時刻を記録`);
+if (marks) console.log(`時刻の記録がないボード ${marks}件に、今の時刻を記録`);
 
 if (dryRun) {
   console.log("DRY_RUN のため書き込んでいません");
