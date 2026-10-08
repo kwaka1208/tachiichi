@@ -31,6 +31,13 @@ jobs:
         run: |
           mkdir _site
           cp index.html help.html og.png _site/
+          # フッターのバージョン表記を、VERSION ファイルの値に置き換える（バージョンは VERSION だけで管理する）
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ -z "$version" ]; then echo "VERSION ファイルが空です"; exit 1; fi
+          for f in _site/index.html _site/help.html; do
+            grep -q '<span class="app-version">' "$f" || { echo "$f にバージョンの表示場所がありません"; exit 1; }
+            sed -i -E "s#(<span class=\"app-version\">)[^<]*(</span>)#\1v${version}\2#" "$f"
+          done
           # JSONとして正しいか、必要な項目がそろっているかを確かめてから config.js を書き出す
           node -e '
             const raw = process.env.FIREBASE_CONFIG;
