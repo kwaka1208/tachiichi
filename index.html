@@ -580,7 +580,7 @@ async function openRoom(db) {
     else if (isHost) text = `${n}人が投票しました。${until}「結果を表示する」を押すと、みんなの位置が表示されます`;
     else if (voted) text = deadline ? `投票しました。${until}締め切ると結果が表示されます`
       : "投票しました。進行役が結果を表示するまでお待ちください";
-    else if (anon) text = `${until}マップで位置を選んでから「投票する」を押してください。名前は入れずに匿名で投票します`;
+    else if (anon) text = `このボードは匿名での投票となります。${until}マップで位置を選んでから「投票する」を押してください`;
     else text = `${until}名前を入れ、マップで位置を選んでから「投票する」を押してください`;
     $("count").textContent = text;
     // 受付を終えたら、締め切ったことと、ボードが削除される日時を知らせる
