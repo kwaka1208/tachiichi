@@ -37,7 +37,7 @@
         "votes": {
           "$vote": {
             ".write": "auth != null && ((!newData.exists() && auth.uid === root.child('rooms').child($room).child('meta/owner').val()) || (newData.exists() && (!data.exists() || data.child('uid').val() === auth.uid) && root.child('rooms').child($room).child('state/revealed').val() !== true && (!root.child('rooms').child($room).child('meta/deadline').exists() || now < root.child('rooms').child($room).child('meta/deadline').val())))",
-            ".validate": "newData.hasChildren(['x','y','uid']) && (newData.hasChild('name') || root.child('rooms').child($room).child('meta/anon').val() === true)",
+            ".validate": "newData.hasChildren(['x','y','uid']) && newData.hasChild('name') === (root.child('rooms').child($room).child('meta/anon').val() !== true)",
             "x": { ".validate": "newData.isNumber() && newData.val() >= -100 && newData.val() <= 100" },
             "y": { ".validate": "newData.isNumber() && newData.val() >= -100 && newData.val() <= 100" },
             "uid": { ".validate": "newData.val() === auth.uid" },

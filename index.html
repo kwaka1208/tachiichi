@@ -114,6 +114,8 @@
   #qr-box.small .qr-lead { font-size: 1rem; }
   #copy-msg { margin: 10px 0 0; font-weight: 700; color: var(--mine); }
   #copy-msg:empty { display: none; }
+  #closed-note { background: var(--panel); border-left: 4px solid var(--mine); border-radius: 6px; padding: 10px 14px; font-weight: 700; }
+  body.host #closed-note { text-align: center; border-left: 0; }
   #msg { min-height: 1.7em; margin-top: 10px; font-weight: 700; color: var(--mine); }
   [hidden] { display: none !important; }
   /* フッターは常に画面の下端に出す。その分だけ本文の下に余白をとる */
@@ -155,7 +157,7 @@
         <div><label for="f-yb">下</label><input type="text" id="f-yb" maxlength="12" placeholder="例：安定"></div>
       </div>
     </fieldset>
-    <label class="check"><input type="checkbox" id="f-anon"> 名前なしの投票を許可する</label>
+    <label class="check"><input type="checkbox" id="f-anon"> 匿名にする（参加者は名前を入れずに投票します）</label>
     <label for="f-deadline">締め切り（入れなくてもかまいません）</label>
     <input type="datetime-local" id="f-deadline">
     <p class="sub">締め切りを入れると、その時刻に投票が締め切られ、結果が表示されます。入れないときは進行役が「結果を表示する」を押したときに締め切ります。</p>
@@ -164,6 +166,7 @@
 
   <section id="v-room" hidden>
     <h1 id="title"></h1>
+    <p id="closed-note" role="status" hidden></p>
     <div id="name-box" hidden>
       <label for="f-name" id="l-name">名前</label>
       <input type="text" id="f-name" maxlength="10" placeholder="例：わか" autocomplete="nickname">
@@ -276,7 +279,7 @@ if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWit
 async function openHost(db) {
   try {
     const host = (await get(ref(db, `hosts/${hostKey}`))).val();
-    if (!host || typeof host.room !== "string") { say("このボードは見つかりません。URLを確認してください"); return; }
+    if (!host || typeof host.room !== "string") { say("このボードは削除されたか、URLが間違っています。ボードは受付を終えてから2週間（受付を終えていないときは、つくってから30日）で自動的に削除されます"); return; }
     room = host.room;
   } catch (e) {
     say("読み込めませんでした。通信状況を確認して、もう一度開いてください"); return;
@@ -327,14 +330,14 @@ async function openRoom(db) {
   } catch (e) {
     say("読み込めませんでした。通信状況を確認して、もう一度開いてください"); return;
   }
-  if (!meta) { say("このボードは見つかりません。URLを確認してください"); return; }
+  if (!meta) { say("このボードは削除されたか、URLが間違っています。ボードは受付を終えてから2週間（受付を終えていないときは、つくってから30日）で自動的に削除されます"); return; }
 
   document.title = meta.title + "｜たちいち";
   $("title").textContent = meta.title;
   for (const k of ["xl", "xr", "yb", "yt"]) $("l-" + k).textContent = meta[k];
   show("v-room");
 
-  const anon = meta.anon === true;     // 名前なしの投票を許可しているか
+  const anon = meta.anon === true;     // 匿名のボードか（全員が名前なしで投票する）
   const canManage = isHost && meta.owner === uid; // 結果の表示や削除ができるか（ボードをつくったブラウザだけ）
   const storeKey = "tachiichi-" + room;
   const nameKey = "tachiichi-name";
@@ -344,6 +347,7 @@ async function openRoom(db) {
   let shown = false;                   // 進行役が「結果を表示する」を押したか
   let timeUp = false;                  // 締め切り時刻を過ぎたか
   let revealed = false;                // 結果を公開しているか（shown か timeUp）
+  let closedAt = null;                 // 進行役が結果を表示した時刻（ミリ秒）
   let offset = 0;                      // 端末の時計とFirebaseサーバーの時刻のずれ
   let timer = null;
   let pos = mine ? { x: mine.x, y: mine.y } : null; // マップで選んでいる位置
@@ -424,10 +428,10 @@ async function openRoom(db) {
       } catch (e) { say("消せませんでした。通信状況を確認してください"); }
     });
   } else {
-    show("name-box"); show("pos"); show("vote-bar");
+    if (!anon) show("name-box");
+    show("pos"); show("vote-bar");
     $("vote-bar").prepend($("msg"));   // メッセージを投票ボタンのすぐ上に出す
     try { $("f-name").value = localStorage.getItem(nameKey) || ""; } catch (e) {}
-    if (anon) $("l-name").textContent = "名前（入れなくても投票できます）";
 
     // マップをタップ（クリック）して点を置き、指を動かすと点もついてくる
     const map = $("map");
@@ -463,7 +467,7 @@ async function openRoom(db) {
     });
 
     $("b-vote").addEventListener("click", async () => {
-      const name = $("f-name").value.trim();
+      const name = anon ? "" : $("f-name").value.trim(); // 匿名のボードでは名前を送らない
       if (!name && !anon) { say("名前を入力してください"); $("f-name").focus(); return; }
       if (!pos) { say("マップをタップして、あなたの位置を選んでください"); return; }
       const { x, y } = pos;
@@ -503,8 +507,19 @@ async function openRoom(db) {
     () => say("結果を読み込めませんでした。通信状況を確認してください"));
   onValue(stateRef, (snap) => {
     shown = !!(snap.val() && snap.val().revealed === true);
+    closedAt = shown && typeof snap.val().closedAt === "number" ? snap.val().closedAt : null;
     refresh();
   }, () => say("結果を読み込めませんでした。通信状況を確認してください"));
+
+  // 画面を開いている間にボードが削除されたら（scripts/cleanup.mjs）、マップを隠して知らせる
+  onValue(ref(db, `rooms/${room}/meta`), (snap) => {
+    if (snap.exists()) return;
+    clearTimeout(timer);
+    document.body.classList.remove("host", "picking");
+    $("v-room").hidden = true;
+    $("v-room").after($("msg"));       // 参加者の画面ではメッセージを投票欄に移しているので、外に戻す
+    say("このボードは、期限を過ぎたため削除されました");
+  });
 
   // 締め切りの判定はサーバーの時刻に合わせる（端末の時計がずれていても同じ時刻に締め切る）
   if (deadline) {
@@ -565,9 +580,19 @@ async function openRoom(db) {
     else if (isHost) text = `${n}人が投票しました。${until}「結果を表示する」を押すと、みんなの位置が表示されます`;
     else if (voted) text = deadline ? `投票しました。${until}締め切ると結果が表示されます`
       : "投票しました。進行役が結果を表示するまでお待ちください";
-    else if (anon) text = `${until}マップで位置を選んでから「投票する」を押してください。名前は入れなくてもかまいません`;
+    else if (anon) text = `${until}マップで位置を選んでから「投票する」を押してください。名前は入れずに匿名で投票します`;
     else text = `${until}名前を入れ、マップで位置を選んでから「投票する」を押してください`;
     $("count").textContent = text;
+    // 受付を終えたら、締め切ったことと、ボードが削除される日時を知らせる
+    $("closed-note").hidden = !revealed;
+    if (revealed) {
+      const ends = [];
+      if (shown && closedAt !== null) ends.push(closedAt);
+      if (timeUp) ends.push(deadline);
+      // 結果を表示した時刻の記録がない古いボードは、削除の日時がわからないので出さない
+      $("closed-note").textContent = "投票を締め切りました。"
+        + (ends.length ? `このボードは${formatTime(deleteTime(Math.min(...ends)))}ごろに削除されます` : "");
+    }
     // 参加者にも、投票の前後でいまの投票人数を別の行で見せる
     $("voters").hidden = revealed || isHost;
     $("voters").textContent = `いま${n}人が投票しています。`;
@@ -594,7 +619,7 @@ async function openRoom(db) {
     }
 
     document.body.classList.toggle("picking", !revealed);
-    $("name-box").hidden = revealed;
+    $("name-box").hidden = revealed || anon;
     $("pos").hidden = revealed;
     $("vote-bar").hidden = revealed;
     $("pos").textContent = pos
@@ -790,6 +815,15 @@ const clamp = (n) => Math.max(-100, Math.min(100, n));
 // 締め切り時刻を「10月5日 15:00」の形にする
 function formatTime(ms) {
   return new Date(ms).toLocaleString("ja-JP", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// 受付を終えた時刻から、ボードが削除される時刻を求める（scripts/cleanup.mjs と合わせる）
+// 削除は毎日 3:00（日本時間＝前日 18:00 UTC）に動き、受付を終えてから14日たったボードを消す
+function deleteTime(end) {
+  const t = new Date(end + 14 * 24 * 60 * 60 * 1000);
+  const run = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), 18));
+  if (run < t) run.setUTCDate(run.getUTCDate() + 1);
+  return run.getTime();
 }
 
 function describe(p, meta) {
